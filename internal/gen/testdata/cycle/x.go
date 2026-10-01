@@ -1,0 +1,12 @@
+//go:build whyor
+
+package x
+
+import "github.com/medzoner/whyor"
+
+type A struct{}
+type B struct{}
+
+func NewA(*B) *A { return nil }
+func NewB(*A) *B { return nil }
+func Init() *A   { panic(whyor.Build(NewA, NewB)) }
