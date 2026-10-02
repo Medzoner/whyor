@@ -19,6 +19,18 @@ go run github.com/Medzoner/whyor/cmd/whyor check ./...  # exit 1 if stale
 go run github.com/Medzoner/whyor/cmd/whyor init ./internal/app  # wire.go skeleton
 ```
 
+Regenerate on every change (polling, no extra dependency):
+
+```
+go run github.com/Medzoner/whyor/cmd/whyor gen -w ./...
+```
+
+Or with `go generate`, from a file without the `whyor` tag:
+
+```go
+//go:generate go run github.com/Medzoner/whyor/cmd/whyor gen .
+```
+
 API:
 - `Build`, `Set`: declare an injector / group providers.
 - `Bind[I, T]()`: provide interface `I` with concrete `T`.

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInit(t *testing.T) {
@@ -38,5 +40,36 @@ func TestInitUsesDirName(t *testing.T) {
 func TestUnknownCommand(t *testing.T) {
 	if run([]string{"nope"}) == nil || run(nil) == nil {
 		t.Fatal("want errors")
+	}
+}
+
+func TestWatchRunsOnChange(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.go")
+	os.WriteFile(file, []byte("package a\n"), 0o644)
+
+	runs := make(chan struct{}, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go watch(ctx, dir, 10*time.Millisecond, func() { runs <- struct{}{} })
+
+	wait := func(what string) {
+		t.Helper()
+		select {
+		case <-runs:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no run: %s", what)
+		}
+	}
+	wait("initial")
+
+	os.WriteFile(file, []byte("package a\n\nvar X = 1\n"), 0o644)
+	wait("after edit")
+
+	os.WriteFile(filepath.Join(dir, "whyor_gen.go"), []byte("package a\n"), 0o644)
+	select {
+	case <-runs:
+		t.Fatal("generated file must not retrigger")
+	case <-time.After(100 * time.Millisecond):
 	}
 }
