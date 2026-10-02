@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -24,33 +25,14 @@ const (
 // generates their injectors. It returns the files that are new or changed;
 // they are written to disk only if write is true.
 func Run(dir string, patterns []string, write bool) ([]string, error) {
-	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedName | packages.NeedSyntax | packages.NeedTypes |
-			packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps,
-		Dir:        dir,
-		BuildFlags: []string{"-tags=whyor"},
-	}, patterns...)
+	pkgs, decls, err := load(dir, patterns)
 	if err != nil {
 		return nil, err
 	}
 
-	decls := map[token.Pos]varDecl{}
-	var loadErr error
-	packages.Visit(pkgs, nil, func(p *packages.Package) {
-		if loadErr == nil && len(p.Errors) > 0 {
-			loadErr = fmt.Errorf("%s: %v", p.PkgPath, p.Errors[0])
-		}
-		for _, f := range p.Syntax {
-			indexVars(p, f, decls)
-		}
-	})
-	if loadErr != nil {
-		return nil, loadErr
-	}
-
 	var changed []string
 	for _, pkg := range pkgs {
-		src, err := generate(pkg, decls)
+		src, err := generate(pkg, decls, false)
 		if err != nil || src == nil {
 			if err != nil {
 				return nil, err
@@ -70,6 +52,47 @@ func Run(dir string, patterns []string, write bool) ([]string, error) {
 	}
 	sort.Strings(changed)
 	return changed, nil
+}
+
+// Show returns the dependency tree of every injector in the matching packages.
+func Show(dir string, patterns []string) (string, error) {
+	pkgs, decls, err := load(dir, patterns)
+	if err != nil {
+		return "", err
+	}
+	var out strings.Builder
+	for _, pkg := range pkgs {
+		tree, err := generate(pkg, decls, true)
+		if err != nil {
+			return "", err
+		}
+		out.Write(tree)
+	}
+	return out.String(), nil
+}
+
+// load type-checks the packages (with the "whyor" tag) and indexes their sets.
+func load(dir string, patterns []string) ([]*packages.Package, map[token.Pos]varDecl, error) {
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedSyntax | packages.NeedTypes |
+			packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps,
+		Dir:        dir,
+		BuildFlags: []string{"-tags=whyor"},
+	}, patterns...)
+	if err != nil {
+		return nil, nil, err
+	}
+	decls := map[token.Pos]varDecl{}
+	var loadErr error
+	packages.Visit(pkgs, nil, func(p *packages.Package) {
+		if loadErr == nil && len(p.Errors) > 0 {
+			loadErr = fmt.Errorf("%s: %v", p.PkgPath, p.Errors[0])
+		}
+		for _, f := range p.Syntax {
+			indexVars(p, f, decls)
+		}
+	})
+	return pkgs, decls, loadErr
 }
 
 // varDecl is a package-level `var x = expr`, used to expand sets.
@@ -96,9 +119,13 @@ func indexVars(p *packages.Package, f *ast.File, out map[token.Pos]varDecl) {
 	}
 }
 
-// generate returns the formatted generated file of pkg, or nil if it has no injector.
-func generate(pkg *packages.Package, decls map[token.Pos]varDecl) ([]byte, error) {
+// generate returns the formatted generated file of pkg, or nil if it has no
+// injector. With show it returns the dependency trees instead.
+func generate(pkg *packages.Package, decls map[token.Pos]varDecl, show bool) ([]byte, error) {
 	g := newFile(pkg, decls)
+	if show {
+		g.tree = &strings.Builder{}
+	}
 	for _, f := range pkg.Syntax {
 		for _, d := range f.Decls {
 			if fd, ok := d.(*ast.FuncDecl); ok {
@@ -109,6 +136,9 @@ func generate(pkg *packages.Package, decls map[token.Pos]varDecl) ([]byte, error
 				}
 			}
 		}
+	}
+	if g.tree != nil {
+		return []byte(g.tree.String()), nil
 	}
 	if g.body.Len() == 0 {
 		return nil, nil

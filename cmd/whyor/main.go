@@ -14,6 +14,7 @@ import (
 const usage = `usage:
   whyor gen   [-w] [packages]   write whyor_gen.go files (-w: regenerate on change)
   whyor check [packages]   exit 1 if generated files are stale
+  whyor show  [packages]   print the dependency tree of each injector
   whyor init  [dir]        create a wire.go skeleton`
 
 func main() {
@@ -38,6 +39,13 @@ func run(args []string) error {
 		if err == nil {
 			fmt.Println(path)
 		}
+		return err
+	case "show":
+		if len(rest) == 0 {
+			rest = []string{"./..."}
+		}
+		tree, err := gen.Show(".", rest)
+		fmt.Print(tree)
 		return err
 	case "gen", "check":
 		if cmd == "gen" && len(rest) > 0 && rest[0] == "-w" {

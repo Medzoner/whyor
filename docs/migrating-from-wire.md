@@ -13,7 +13,7 @@ arguments), so the migration is mechanical but not a rename.
 | `wire` / `wire gen` | `whyor gen` |
 | `wire check` | `whyor check` |
 | `wire diff` | `whyor check` (exits 1 if stale) |
-| `wire show` | not available |
+| `wire show` | `whyor show` (dependency tree of each injector) |
 | import `github.com/google/wire` | import `github.com/Medzoner/whyor` |
 
 Extras: `whyor gen -w` regenerates on change, `whyor init` creates `wire.go`.
@@ -27,8 +27,8 @@ Extras: `whyor gen -w` regenerates on change, `whyor init` creates `wire.go`.
 | `wire.Bind(new(I), new(*T))` | `whyor.Bind[I, *T]()` |
 | `wire.Value(v)` | `whyor.Value[T](v)` |
 | `wire.InterfaceValue(new(I), v)` | `whyor.Value[I](v)` |
-| `wire.Struct(new(T), "*")` | `whyor.Struct[T]()` (all exported fields) |
-| `wire.Struct(new(T), "A", "B")` | not available: a struct always gets every exported field; tag the others `whyor:"-"` |
+| `wire.Struct(new(T), "*")` | `whyor.Struct[T]()` (or `Struct[T]("*")`) |
+| `wire.Struct(new(T), "A", "B")` | `whyor.Struct[T]("A", "B")` |
 | `wire.FieldsOf(new(T), "A", "B")` | `whyor.FieldsOf[T]("A", "B")` |
 | `wire.Struct` field tag `wire:"-"` | field tag `whyor:"-"` |
 | `wire.Build` in a func returning `(T, func(), error)` | same shapes: `T`, `(T, func())`, `(T, error)`, `(T, func(), error)` |

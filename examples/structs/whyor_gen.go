@@ -8,8 +8,7 @@ func InitServer() *Server {
 	v1 := NewConfig()
 	v2 := v1.Addr
 	v3 := v1.Port
-	v4 := NewLogger()
-	v5 := &Deps{Cfg: v1, Log: v4}
-	v6 := NewServer(v2, v3, v5)
-	return v6
+	v4 := &Deps{Cfg: v1}
+	v5 := NewServer(v2, v3, v4)
+	return v5
 }

@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"reflect"
+	"slices"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -178,7 +179,7 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 			if len(targs) != 1 || c.many != nil {
 				break
 			}
-			return c.addStruct(targs[0], at)
+			return c.addStruct(targs[0], v, p, at)
 		case "FieldsOf":
 			if len(targs) != 1 || c.many != nil {
 				break
@@ -261,20 +262,33 @@ func (f *file) valueExpr(x ast.Expr, p *packages.Package) (string, error) {
 	return b.String(), err
 }
 
-// addStruct registers T and *T, both built from the exported fields of struct T.
-func (c *collector) addStruct(t types.Type, at token.Position) error {
+// addStruct registers T and *T, both built from fields of struct T: the
+// exported untagged ones, or the named ones ("*" means the default set).
+func (c *collector) addStruct(t types.Type, call *ast.CallExpr, p *packages.Package, at token.Position) error {
 	st, ok := t.Underlying().(*types.Struct)
 	if !ok {
 		return fmt.Errorf("%s: Struct: %s is not a struct", at, c.f.typ(t))
 	}
-	b := &binding{out: t, fields: []string{}}
-	for i := range st.NumFields() {
-		f := st.Field(i)
-		if !f.Exported() || reflect.StructTag(st.Tag(i)).Get("whyor") == "-" {
-			continue
+	names, err := stringArgs(call, p, at, "Struct")
+	if err != nil {
+		return err
+	}
+	if len(names) == 0 || slices.Equal(names, []string{"*"}) {
+		names = nil
+		for i := range st.NumFields() {
+			if f := st.Field(i); f.Exported() && reflect.StructTag(st.Tag(i)).Get("whyor") != "-" {
+				names = append(names, f.Name())
+			}
 		}
-		b.fields = append(b.fields, f.Name())
-		b.ins = append(b.ins, f.Type())
+	}
+	b := &binding{out: t, fields: []string{}}
+	for _, name := range names {
+		i := slices.IndexFunc(structFields(st), func(f *types.Var) bool { return f.Name() == name })
+		if i < 0 || !st.Field(i).Exported() {
+			return fmt.Errorf("%s: Struct: %s has no exported field %s", at, c.f.typ(t), name)
+		}
+		b.fields = append(b.fields, name)
+		b.ins = append(b.ins, st.Field(i).Type())
 	}
 	if len(b.fields) == 0 {
 		return fmt.Errorf("%s: Struct: %s has no injectable field", at, c.f.typ(t))
@@ -287,6 +301,27 @@ func (c *collector) addStruct(t types.Type, at token.Position) error {
 	return c.add(&ptr)
 }
 
+func structFields(st *types.Struct) []*types.Var {
+	out := make([]*types.Var, st.NumFields())
+	for i := range out {
+		out[i] = st.Field(i)
+	}
+	return out
+}
+
+// stringArgs returns the constant string arguments of call.
+func stringArgs(call *ast.CallExpr, p *packages.Package, at token.Position, api string) ([]string, error) {
+	var out []string
+	for _, a := range call.Args {
+		tv := p.TypesInfo.Types[a]
+		if tv.Value == nil || tv.Value.Kind() != constant.String {
+			return nil, fmt.Errorf("%s: %s: field names must be string constants", at, api)
+		}
+		out = append(out, constant.StringVal(tv.Value))
+	}
+	return out, nil
+}
+
 // addFieldsOf registers each named field of t as a dependency read from a t value.
 func (c *collector) addFieldsOf(t types.Type, call *ast.CallExpr, p *packages.Package, at token.Position) error {
 	if ptr, ok := t.Underlying().(*types.Pointer); ok {
@@ -296,12 +331,11 @@ func (c *collector) addFieldsOf(t types.Type, call *ast.CallExpr, p *packages.Pa
 	} else if _, ok := t.Underlying().(*types.Struct); !ok {
 		return fmt.Errorf("%s: FieldsOf: %s is not a struct", at, c.f.typ(t))
 	}
-	for _, a := range call.Args {
-		tv := p.TypesInfo.Types[a]
-		if tv.Value == nil || tv.Value.Kind() != constant.String {
-			return fmt.Errorf("%s: FieldsOf: field names must be string constants", at)
-		}
-		name := constant.StringVal(tv.Value)
+	names, err := stringArgs(call, p, at, "FieldsOf")
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
 		f, _, _ := types.LookupFieldOrMethod(t, true, c.f.pkg.Types, name)
 		fv, ok := f.(*types.Var)
 		if !ok || !fv.IsField() {

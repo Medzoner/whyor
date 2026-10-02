@@ -20,6 +20,7 @@ type file struct {
 	aliases map[string]string // import path -> alias
 	used    map[string]string // alias -> import path
 	body    bytes.Buffer
+	tree    *strings.Builder // set by Show: print dependency trees instead of code
 }
 
 func newFile(pkg *packages.Package, decls map[token.Pos]varDecl) *file {
@@ -128,9 +129,14 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 		r.done[typeKey(p.Type())] = name
 		params = append(params, name+" "+f.typ(p.Type()))
 	}
+	given := maps.Clone(r.done)
 	out, err := r.resolve(res.out)
 	if err != nil {
 		return err
+	}
+	if f.tree != nil {
+		r.writeTree(f.tree, fd.Name.Name, res.out, given)
+		return nil
 	}
 
 	rets := []string{f.typ(res.out)}

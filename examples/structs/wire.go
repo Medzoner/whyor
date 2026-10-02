@@ -7,7 +7,7 @@ import "github.com/Medzoner/whyor"
 func InitServer() *Server {
 	panic(whyor.Build(
 		NewConfig, NewLogger,
-		whyor.Struct[Deps](),
+		whyor.Struct[Deps]("Cfg"),
 		whyor.FieldsOf[*Config]("Addr", "Port"),
 		NewServer,
 	))

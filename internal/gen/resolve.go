@@ -34,10 +34,7 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 			return "", fmt.Errorf("dependency cycle: %s", r.path(t))
 		}
 	}
-	b, ok := r.bindings[k]
-	if !ok {
-		b, ok = r.autoBind(t)
-	}
+	b, ok := r.lookup(t)
 	if !ok {
 		msg := "no provider for " + r.f.typ(t)
 		if len(r.stack) > 0 {
@@ -56,6 +53,13 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 		r.done[k] = v
 	}
 	return v, err
+}
+
+func (r *resolver) lookup(t types.Type) (*binding, bool) {
+	if b, ok := r.bindings[typeKey(t)]; ok {
+		return b, true
+	}
+	return r.autoBind(t)
 }
 
 // hint suggests how to provide t from what is already registered.

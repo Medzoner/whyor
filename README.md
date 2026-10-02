@@ -17,6 +17,7 @@ func InitApp(dsn string) (*App, func(), error) {
 go run github.com/Medzoner/whyor/cmd/whyor gen ./...    # writes whyor_gen.go
 go run github.com/Medzoner/whyor/cmd/whyor check ./...  # exit 1 if stale
 go run github.com/Medzoner/whyor/cmd/whyor init ./internal/app  # wire.go skeleton
+go run github.com/Medzoner/whyor/cmd/whyor show ./...  # dependency tree of each injector
 ```
 
 Regenerate on every change (polling, no extra dependency):
@@ -35,7 +36,7 @@ API:
 - `Build`, `Set`: declare an injector / group providers.
 - `Bind[I, T]()`: provide interface `I` with concrete `T`.
 - `Value[T](v)`: provide a literal.
-- `Struct[T]()`: provide `T` and `*T` by filling exported fields (skip with `whyor:"-"`).
+- `Struct[T](fields...)`: provide `T` and `*T` by filling fields: all exported ones by default (skip with `whyor:"-"`), or only the named ones.
 - `FieldsOf[T]("A", "B")`: provide fields of a struct as dependencies.
 - `Many[T](providers...)`: provide a `[]T`.
 - `AutoBind[T]()`: use `T` for any needed interface it implements (must be unambiguous).
