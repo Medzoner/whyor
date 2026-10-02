@@ -88,6 +88,14 @@ func (f *file) zero(t types.Type) string {
 }
 
 func (f *file) injector(fd *ast.FuncDecl, call *ast.CallExpr) error {
+	err := f.inject(fd, call)
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %s: %w", f.pkg.Fset.Position(call.Pos()), fd.Name.Name, err)
+}
+
+func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	obj, _ := f.pkg.TypesInfo.Defs[fd.Name].(*types.Func)
 	sig := obj.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.TypeParams().Len() > 0 || sig.Variadic() {

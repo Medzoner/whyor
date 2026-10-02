@@ -1,8 +1,10 @@
 package gen
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -37,10 +39,14 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 		b, ok = r.autoBind(t)
 	}
 	if !ok {
+		msg := "no provider for " + r.f.typ(t)
 		if len(r.stack) > 0 {
-			return "", fmt.Errorf("no provider for %s (needed by %s)", r.f.typ(t), r.f.typ(r.stack[len(r.stack)-1]))
+			msg += " (needed by " + r.f.typ(r.stack[len(r.stack)-1]) + ")"
 		}
-		return "", fmt.Errorf("no provider for %s", r.f.typ(t))
+		if h := r.hint(t); h != "" {
+			msg += "\n\thint: " + h
+		}
+		return "", errors.New(msg)
 	}
 	r.stack = append(r.stack, t)
 	defer func() { r.stack = r.stack[:len(r.stack)-1] }()
@@ -50,6 +56,24 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 		r.done[k] = v
 	}
 	return v, err
+}
+
+// hint suggests how to provide t from what is already registered.
+func (r *resolver) hint(t types.Type) string {
+	for _, k := range slices.Sorted(maps.Keys(r.bindings)) {
+		o := r.bindings[k].out
+		if iface, ok := t.Underlying().(*types.Interface); ok && !types.IsInterface(o) && types.Implements(o, iface) {
+			return fmt.Sprintf("%s implements %s: add whyor.Bind[%s, %s]() or whyor.AutoBind[%s]()",
+				r.f.typ(o), r.f.typ(t), r.f.typ(t), r.f.typ(o), r.f.typ(o))
+		}
+		if p, ok := o.(*types.Pointer); ok && typeKey(p.Elem()) == typeKey(t) {
+			return fmt.Sprintf("a provider for %s exists, but not for %s", r.f.typ(o), r.f.typ(t))
+		}
+		if p, ok := t.(*types.Pointer); ok && typeKey(p.Elem()) == k {
+			return fmt.Sprintf("a provider for %s exists, but not for %s", r.f.typ(o), r.f.typ(t))
+		}
+	}
+	return ""
 }
 
 // autoBind finds the single AutoBind type implementing interface t.
@@ -85,6 +109,30 @@ func (r *resolver) emit(b *binding) (string, error) {
 		}
 		v := r.next()
 		fmt.Fprintf(&r.lines, "\t%s := %s{%s}\n", v, r.f.typ(b.out), strings.Join(vs, ", "))
+		return v, nil
+	case b.field != "":
+		src, err := r.resolve(b.ins[0])
+		if err != nil {
+			return "", err
+		}
+		v := r.next()
+		fmt.Fprintf(&r.lines, "\t%s := %s.%s\n", v, src, b.field)
+		return v, nil
+	case b.fields != nil:
+		parts := make([]string, len(b.ins))
+		for i, in := range b.ins {
+			a, err := r.resolve(in)
+			if err != nil {
+				return "", err
+			}
+			parts[i] = b.fields[i] + ": " + a
+		}
+		lit, typ := "", b.out
+		if b.ptr {
+			lit, typ = "&", b.out.(*types.Pointer).Elem()
+		}
+		v := r.next()
+		fmt.Fprintf(&r.lines, "\t%s := %s%s{%s}\n", v, lit, r.f.typ(typ), strings.Join(parts, ", "))
 		return v, nil
 	case b.fn == nil:
 		v := r.next()

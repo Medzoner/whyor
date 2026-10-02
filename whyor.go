@@ -26,6 +26,14 @@ func Build(opts ...Option) any { return nil }
 // Bind tells the generator that interface I is satisfied by concrete type T.
 func Bind[I, T any]() Option { return nil }
 
+// Struct provides both T and *T by filling the exported fields of struct T
+// with dependencies. Fields tagged `whyor:"-"` are left zero.
+func Struct[T any]() Option { return nil }
+
+// FieldsOf provides the named fields of T (a struct or pointer to struct)
+// as dependencies of their own types.
+func FieldsOf[T any](fields ...string) Option { return nil }
+
 // Many provides a []T made of the given providers, each returning a value
 // assignable to T. Its elements are not provided as T on their own.
 func Many[T any](opts ...Option) Option { return nil }

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/printer"
 	"go/token"
 	"go/types"
+	"reflect"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -20,8 +22,27 @@ type binding struct {
 	res    results
 	target types.Type
 	expr   string
+	fields []string   // Struct: fields of the struct literal, in order (ins hold their types)
+	ptr    bool       // Struct: build &T{} instead of T{}
+	field  string     // FieldsOf: field read from ins[0]
 	many   bool       // a []T built from elems
 	elems  []*binding // elements of a Many
+}
+
+func (b *binding) describe() string {
+	switch {
+	case b.fn != nil:
+		return b.fn.Name()
+	case b.target != nil:
+		return "Bind"
+	case b.many:
+		return "Many"
+	case b.field != "":
+		return "FieldsOf"
+	case b.fields != nil:
+		return "Struct"
+	}
+	return "Value"
 }
 
 // results describes the shape `T, [func()], [error]` of providers and injectors.
@@ -95,7 +116,7 @@ func (c *collector) add(b *binding) error {
 	}
 	k := typeKey(b.out)
 	if old, ok := c.bindings[k]; ok && (old.fn == nil || old.fn != b.fn) {
-		return fmt.Errorf("multiple providers for %s", c.f.typ(b.out))
+		return fmt.Errorf("multiple providers for %s (%s, %s)", c.f.typ(b.out), old.describe(), b.describe())
 	}
 	c.bindings[k] = b
 	return nil
@@ -153,6 +174,16 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 				return fmt.Errorf("%s: Bind: %s does not implement %s", at, c.f.typ(targs[1]), c.f.typ(targs[0]))
 			}
 			return c.add(&binding{out: targs[0], target: targs[1]})
+		case "Struct":
+			if len(targs) != 1 || c.many != nil {
+				break
+			}
+			return c.addStruct(targs[0], at)
+		case "FieldsOf":
+			if len(targs) != 1 || c.many != nil {
+				break
+			}
+			return c.addFieldsOf(targs[0], v, p, at)
 		case "Value":
 			if len(targs) != 1 || len(v.Args) != 1 {
 				break
@@ -228,4 +259,57 @@ func (f *file) valueExpr(x ast.Expr, p *packages.Package) (string, error) {
 	var b bytes.Buffer
 	err = printer.Fprint(&b, p.Fset, x)
 	return b.String(), err
+}
+
+// addStruct registers T and *T, both built from the exported fields of struct T.
+func (c *collector) addStruct(t types.Type, at token.Position) error {
+	st, ok := t.Underlying().(*types.Struct)
+	if !ok {
+		return fmt.Errorf("%s: Struct: %s is not a struct", at, c.f.typ(t))
+	}
+	b := &binding{out: t, fields: []string{}}
+	for i := range st.NumFields() {
+		f := st.Field(i)
+		if !f.Exported() || reflect.StructTag(st.Tag(i)).Get("whyor") == "-" {
+			continue
+		}
+		b.fields = append(b.fields, f.Name())
+		b.ins = append(b.ins, f.Type())
+	}
+	if len(b.fields) == 0 {
+		return fmt.Errorf("%s: Struct: %s has no injectable field", at, c.f.typ(t))
+	}
+	ptr := *b
+	ptr.out, ptr.ptr = types.NewPointer(t), true
+	if err := c.add(b); err != nil {
+		return err
+	}
+	return c.add(&ptr)
+}
+
+// addFieldsOf registers each named field of t as a dependency read from a t value.
+func (c *collector) addFieldsOf(t types.Type, call *ast.CallExpr, p *packages.Package, at token.Position) error {
+	if ptr, ok := t.Underlying().(*types.Pointer); ok {
+		if _, ok := ptr.Elem().Underlying().(*types.Struct); !ok {
+			return fmt.Errorf("%s: FieldsOf: %s is not a struct", at, c.f.typ(t))
+		}
+	} else if _, ok := t.Underlying().(*types.Struct); !ok {
+		return fmt.Errorf("%s: FieldsOf: %s is not a struct", at, c.f.typ(t))
+	}
+	for _, a := range call.Args {
+		tv := p.TypesInfo.Types[a]
+		if tv.Value == nil || tv.Value.Kind() != constant.String {
+			return fmt.Errorf("%s: FieldsOf: field names must be string constants", at)
+		}
+		name := constant.StringVal(tv.Value)
+		f, _, _ := types.LookupFieldOrMethod(t, true, c.f.pkg.Types, name)
+		fv, ok := f.(*types.Var)
+		if !ok || !fv.IsField() {
+			return fmt.Errorf("%s: FieldsOf: %s has no field %s", at, c.f.typ(t), name)
+		}
+		if err := c.add(&binding{out: fv.Type(), ins: []types.Type{t}, field: name}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

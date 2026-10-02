@@ -104,7 +104,7 @@ func generate(pkg *packages.Package, decls map[token.Pos]varDecl) ([]byte, error
 			if fd, ok := d.(*ast.FuncDecl); ok {
 				if call := buildCall(pkg.TypesInfo, fd); call != nil {
 					if err := g.injector(fd, call); err != nil {
-						return nil, fmt.Errorf("%s.%s: %w", pkg.PkgPath, fd.Name.Name, err)
+						return nil, err
 					}
 				}
 			}
