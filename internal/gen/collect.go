@@ -58,7 +58,25 @@ func isCleanup(t types.Type) bool {
 	return ok && s.Params().Len() == 0 && s.Results().Len() == 0
 }
 
-func typeKey(t types.Type) string { return types.TypeString(t, nil) }
+// typeKey identifies a type, seeing through aliases (type X = Y).
+func typeKey(t types.Type) string { return types.TypeString(unalias(t), nil) }
+
+func unalias(t types.Type) types.Type {
+	switch t := types.Unalias(t).(type) {
+	case *types.Pointer:
+		return types.NewPointer(unalias(t.Elem()))
+	case *types.Slice:
+		return types.NewSlice(unalias(t.Elem()))
+	case *types.Array:
+		return types.NewArray(unalias(t.Elem()), t.Len())
+	case *types.Map:
+		return types.NewMap(unalias(t.Key()), unalias(t.Elem()))
+	case *types.Chan:
+		return types.NewChan(t.Dir(), unalias(t.Elem()))
+	default:
+		return t
+	}
+}
 
 // collector expands the arguments of Build into bindings.
 type collector struct {
