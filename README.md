@@ -48,3 +48,5 @@ returning `T`, `(T, func())`, `(T, error)` or `(T, func(), error)`.
 See `examples/basic`.
 
 Coming from Wire? See [docs/migrating-from-wire.md](docs/migrating-from-wire.md).
+
+Install locally: `make install` (puts `whyor` in `$(go env GOPATH)/bin`).
