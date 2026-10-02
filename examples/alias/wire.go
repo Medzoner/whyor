@@ -2,6 +2,6 @@
 
 package alias
 
-import "github.com/medzoner/whyor"
+import "github.com/Medzoner/whyor"
 
 func InitRepo() *Repo { panic(whyor.Build(NewDB, NewRepo)) }

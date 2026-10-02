@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	alog "github.com/medzoner/whyor/examples/edge/a/log"
-	blog "github.com/medzoner/whyor/examples/edge/b/log"
+	alog "github.com/Medzoner/whyor/examples/edge/a/log"
+	blog "github.com/Medzoner/whyor/examples/edge/b/log"
 )
 
 // Out is returned by value so a failing injector needs a zero value.

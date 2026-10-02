@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	whyorPath = "github.com/medzoner/whyor"
+	whyorPath = "github.com/Medzoner/whyor"
 	genFile   = "whyor_gen.go"
 )
 

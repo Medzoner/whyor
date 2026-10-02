@@ -5,9 +5,9 @@ package edge
 import (
 	"time"
 
-	"github.com/medzoner/whyor"
-	alog "github.com/medzoner/whyor/examples/edge/a/log"
-	blog "github.com/medzoner/whyor/examples/edge/b/log"
+	"github.com/Medzoner/whyor"
+	alog "github.com/Medzoner/whyor/examples/edge/a/log"
+	blog "github.com/Medzoner/whyor/examples/edge/b/log"
 )
 
 func InitOut() (Out, func(), error) {

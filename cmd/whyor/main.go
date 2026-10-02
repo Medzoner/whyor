@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/medzoner/whyor/internal/gen"
+	"github.com/Medzoner/whyor/internal/gen"
 )
 
 func main() {

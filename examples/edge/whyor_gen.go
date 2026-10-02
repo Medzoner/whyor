@@ -5,8 +5,8 @@
 package edge
 
 import (
-	log "github.com/medzoner/whyor/examples/edge/a/log"
-	log2 "github.com/medzoner/whyor/examples/edge/b/log"
+	log "github.com/Medzoner/whyor/examples/edge/a/log"
+	log2 "github.com/Medzoner/whyor/examples/edge/b/log"
 	time "time"
 )
 

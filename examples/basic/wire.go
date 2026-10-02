@@ -2,7 +2,7 @@
 
 package basic
 
-import "github.com/medzoner/whyor"
+import "github.com/Medzoner/whyor"
 
 var DBSet = whyor.Set(NewConfig, NewPG, whyor.Bind[Store, *PG]())
 

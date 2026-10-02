@@ -1,4 +1,4 @@
-module github.com/medzoner/whyor
+module github.com/Medzoner/whyor
 
 go 1.25.0
 

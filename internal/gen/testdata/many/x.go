@@ -2,7 +2,7 @@
 
 package x
 
-import "github.com/medzoner/whyor"
+import "github.com/Medzoner/whyor"
 
 type A struct{}
 

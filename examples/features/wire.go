@@ -2,7 +2,7 @@
 
 package features
 
-import "github.com/medzoner/whyor"
+import "github.com/Medzoner/whyor"
 
 func InitServer(log *[]string) (*Server, func()) {
 	panic(whyor.Build(
