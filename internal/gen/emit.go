@@ -20,6 +20,7 @@ type file struct {
 	aliases map[string]string // import path -> alias
 	used    map[string]string // alias -> import path
 	body    bytes.Buffer
+	opts    options
 	tree    *strings.Builder // set by Show: print dependency trees instead of code
 }
 
@@ -134,8 +135,11 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	if err != nil {
 		return err
 	}
+	if f.opts.use != nil {
+		f.record(c, r)
+	}
 	if f.tree != nil {
-		r.writeTree(f.tree, fd.Name.Name, res.out, given)
+		r.writeGraph(f.tree, fd.Name.Name, res.out, given, f.opts.format)
 		return nil
 	}
 
@@ -156,4 +160,23 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	fmt.Fprintf(&f.body, "func %s(%s) %s {\n%s\treturn %s\n}\n\n",
 		fd.Name.Name, strings.Join(params, ", "), retSig, r.lines.String(), ret)
 	return nil
+}
+
+// record notes the providers an injector declares and the ones it calls.
+func (f *file) record(c *collector, r *resolver) {
+	var declare func(b *binding)
+	declare = func(b *binding) {
+		if b.fn != nil {
+			f.opts.use.declared[b.fn] = f.pkg.Fset.Position(b.fn.Pos())
+		}
+		for _, e := range b.elems {
+			declare(e)
+		}
+	}
+	for _, b := range c.bindings {
+		declare(b)
+	}
+	for fn := range r.fns {
+		f.opts.use.used[fn] = true
+	}
 }

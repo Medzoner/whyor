@@ -32,7 +32,7 @@ func Run(dir string, patterns []string, write bool) ([]string, error) {
 
 	var changed []string
 	for _, pkg := range pkgs {
-		src, err := generate(pkg, decls, false)
+		src, err := generate(pkg, decls, options{})
 		if err != nil || src == nil {
 			if err != nil {
 				return nil, err
@@ -54,15 +54,18 @@ func Run(dir string, patterns []string, write bool) ([]string, error) {
 	return changed, nil
 }
 
-// Show returns the dependency tree of every injector in the matching packages.
-func Show(dir string, patterns []string) (string, error) {
+// Show returns the dependency graph of every injector, as a tree, mermaid or dot. in the matching packages.
+func Show(dir string, patterns []string, format string) (string, error) {
+	if format != "tree" && format != "mermaid" && format != "dot" {
+		return "", fmt.Errorf("unknown format %q (want tree, mermaid or dot)", format)
+	}
 	pkgs, decls, err := load(dir, patterns)
 	if err != nil {
 		return "", err
 	}
 	var out strings.Builder
 	for _, pkg := range pkgs {
-		tree, err := generate(pkg, decls, true)
+		tree, err := generate(pkg, decls, options{show: true, format: format})
 		if err != nil {
 			return "", err
 		}
@@ -95,6 +98,41 @@ func load(dir string, patterns []string) ([]*packages.Package, map[token.Pos]var
 	return pkgs, decls, loadErr
 }
 
+// Unused lists the providers named in an injector that no injector calls.
+func Unused(dir string, patterns []string) ([]string, error) {
+	pkgs, decls, err := load(dir, patterns)
+	if err != nil {
+		return nil, err
+	}
+	use := &usage{declared: map[*types.Func]token.Position{}, used: map[*types.Func]bool{}}
+	for _, pkg := range pkgs {
+		if _, err := generate(pkg, decls, options{use: use}); err != nil {
+			return nil, err
+		}
+	}
+	var out []string
+	for fn, pos := range use.declared {
+		if !use.used[fn] {
+			out = append(out, fmt.Sprintf("%s: provider %s is never used", pos, fn.Name()))
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// usage records which providers are declared by injectors and which are called.
+type usage struct {
+	declared map[*types.Func]token.Position
+	used     map[*types.Func]bool
+}
+
+// options tune a generate run.
+type options struct {
+	show   bool   // print dependency graphs instead of code
+	format string // graph format when show is set
+	use    *usage // when set, record provider usage
+}
+
 // varDecl is a package-level `var x = expr`, used to expand sets.
 type varDecl struct {
 	expr ast.Expr
@@ -121,9 +159,10 @@ func indexVars(p *packages.Package, f *ast.File, out map[token.Pos]varDecl) {
 
 // generate returns the formatted generated file of pkg, or nil if it has no
 // injector. With show it returns the dependency trees instead.
-func generate(pkg *packages.Package, decls map[token.Pos]varDecl, show bool) ([]byte, error) {
+func generate(pkg *packages.Package, decls map[token.Pos]varDecl, opts options) ([]byte, error) {
 	g := newFile(pkg, decls)
-	if show {
+	g.opts = opts
+	if opts.show {
 		g.tree = &strings.Builder{}
 	}
 	for _, f := range pkg.Syntax {

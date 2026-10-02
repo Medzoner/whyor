@@ -14,7 +14,8 @@ import (
 const usage = `usage:
   whyor gen   [-w] [packages]   write whyor_gen.go files (-w: regenerate on change)
   whyor check [packages]   exit 1 if generated files are stale
-  whyor show  [packages]   print the dependency tree of each injector
+  whyor show  [-f tree|mermaid|dot] [packages]   print each injector's dependencies
+  whyor unused [packages]  list providers no injector calls (exit 1 if any)
   whyor init  [dir]        create a wire.go skeleton`
 
 func main() {
@@ -44,8 +45,27 @@ func run(args []string) error {
 		if len(rest) == 0 {
 			rest = []string{"./..."}
 		}
-		tree, err := gen.Show(".", rest)
+		format := "tree"
+		if len(rest) >= 2 && rest[0] == "-f" {
+			format, rest = rest[1], rest[2:]
+		}
+		if len(rest) == 0 {
+			rest = []string{"./..."}
+		}
+		tree, err := gen.Show(".", rest, format)
 		fmt.Print(tree)
+		return err
+	case "unused":
+		if len(rest) == 0 {
+			rest = []string{"./..."}
+		}
+		list, err := gen.Unused(".", rest)
+		for _, l := range list {
+			fmt.Println(l)
+		}
+		if err == nil && len(list) > 0 {
+			err = fmt.Errorf("%d unused provider(s)", len(list))
+		}
 		return err
 	case "gen", "check":
 		if cmd == "gen" && len(rest) > 0 && rest[0] == "-w" {

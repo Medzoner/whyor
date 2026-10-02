@@ -17,7 +17,8 @@ func InitApp(dsn string) (*App, func(), error) {
 go run github.com/Medzoner/whyor/cmd/whyor gen ./...    # writes whyor_gen.go
 go run github.com/Medzoner/whyor/cmd/whyor check ./...  # exit 1 if stale
 go run github.com/Medzoner/whyor/cmd/whyor init ./internal/app  # wire.go skeleton
-go run github.com/Medzoner/whyor/cmd/whyor show ./...  # dependency tree of each injector
+go run github.com/Medzoner/whyor/cmd/whyor show [-f tree|mermaid|dot] ./...  # dependencies of each injector
+go run github.com/Medzoner/whyor/cmd/whyor unused ./...  # providers no injector calls (exit 1)
 ```
 
 Regenerate on every change (polling, no extra dependency):

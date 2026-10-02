@@ -6,20 +6,25 @@ import (
 	"strings"
 )
 
-// child is a node of a dependency tree: a type, and the binding providing it
+// child is a node of a dependency graph: a type, and the binding providing it
 // when that is already known (elements of a Many).
 type child struct {
 	t types.Type
 	b *binding
 }
 
-// writeTree prints the dependency tree of an injector returning out.
+// writeGraph prints the dependency graph of an injector returning out.
 // given holds the injector parameters, keyed by type.
-func (r *resolver) writeTree(w *strings.Builder, name string, out types.Type, given map[string]string) {
-	fmt.Fprintf(w, "%s\n", name)
-	seen := map[string]bool{}
-	r.node(w, child{t: out}, "", true, given, seen)
-	w.WriteString("\n")
+func (r *resolver) writeGraph(w *strings.Builder, name string, out types.Type, given map[string]string, format string) {
+	if format == "tree" {
+		fmt.Fprintf(w, "%s\n", name)
+		r.node(w, child{t: out}, "", true, given, map[string]bool{})
+		w.WriteString("\n")
+		return
+	}
+	g := &graph{ids: map[string]string{}}
+	g.walk(r, child{t: out}, given)
+	g.write(w, name, format)
 }
 
 func (r *resolver) node(w *strings.Builder, c child, prefix string, last bool, given map[string]string, seen map[string]bool) {
@@ -36,7 +41,7 @@ func (r *resolver) node(w *strings.Builder, c child, prefix string, last bool, g
 		}
 		b, _ = r.lookup(c.t)
 	}
-	label := fmt.Sprintf("%s [%s]", r.f.typ(c.t), r.provider(b))
+	label := r.label(c, b, given)
 	if seen[k] && c.b == nil {
 		fmt.Fprintf(w, "%s%s%s (*)\n", prefix, branch, label)
 		return
@@ -48,6 +53,71 @@ func (r *resolver) node(w *strings.Builder, c child, prefix string, last bool, g
 	for i, kid := range kids {
 		r.node(w, kid, prefix+next, i == len(kids)-1, given, seen)
 	}
+}
+
+// label is "type [provider]" for a node.
+func (r *resolver) label(c child, b *binding, given map[string]string) string {
+	if p, ok := given[typeKey(c.t)]; ok && c.b == nil {
+		return fmt.Sprintf("%s [parameter %s]", r.f.typ(c.t), p)
+	}
+	return fmt.Sprintf("%s [%s]", r.f.typ(c.t), r.provider(b))
+}
+
+// graph is a dependency graph with one node per type, for mermaid and dot.
+type graph struct {
+	ids    map[string]string // type key -> node id
+	labels []string          // by node id index
+	edges  [][2]int
+}
+
+func (g *graph) walk(r *resolver, c child, given map[string]string) int {
+	k := typeKey(c.t)
+	if id, ok := g.ids[k]; ok && c.b == nil {
+		return indexOf(id)
+	}
+	b := c.b
+	if b == nil {
+		b, _ = r.lookup(c.t)
+	}
+	n := len(g.labels)
+	g.ids[k] = fmt.Sprintf("n%d", n)
+	g.labels = append(g.labels, r.label(c, b, given))
+	if _, isParam := given[k]; isParam && c.b == nil {
+		return n
+	}
+	for _, kid := range children(b) {
+		g.edges = append(g.edges, [2]int{n, g.walk(r, kid, given)})
+	}
+	return n
+}
+
+func indexOf(id string) int {
+	var n int
+	fmt.Sscanf(id, "n%d", &n)
+	return n
+}
+
+func (g *graph) write(w *strings.Builder, name, format string) {
+	esc := func(s string) string { return strings.ReplaceAll(s, `"`, `'`) }
+	if format == "mermaid" {
+		fmt.Fprintf(w, "%%%% %s\ngraph TD\n", name)
+		for i, l := range g.labels {
+			fmt.Fprintf(w, "  n%d[\"%s\"]\n", i, esc(l))
+		}
+		for _, e := range g.edges {
+			fmt.Fprintf(w, "  n%d --> n%d\n", e[0], e[1])
+		}
+		w.WriteString("\n")
+		return
+	}
+	fmt.Fprintf(w, "digraph %q {\n", name)
+	for i, l := range g.labels {
+		fmt.Fprintf(w, "  n%d [label=%q];\n", i, l)
+	}
+	for _, e := range g.edges {
+		fmt.Fprintf(w, "  n%d -> n%d;\n", e[0], e[1])
+	}
+	w.WriteString("}\n\n")
 }
 
 func children(b *binding) []child {

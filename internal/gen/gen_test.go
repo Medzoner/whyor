@@ -35,7 +35,7 @@ func TestErrors(t *testing.T) {
 }
 
 func TestShow(t *testing.T) {
-	got, err := Show("../..", []string{"./examples/basic"})
+	got, err := Show("../..", []string{"./examples/basic"}, "tree")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,5 +49,30 @@ func TestShow(t *testing.T) {
 `
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestUnused(t *testing.T) {
+	got, err := Unused("../..", []string{"./internal/gen/testdata/unusedprov"})
+	if err != nil || len(got) != 1 || !strings.HasSuffix(got[0], "provider NewB is never used") {
+		t.Fatalf("got=%v err=%v", got, err)
+	}
+	if got, err := Unused("../..", []string{"./examples/..."}); err != nil || len(got) != 0 {
+		t.Fatalf("examples must have no unused provider: %v %v", got, err)
+	}
+}
+
+func TestShowFormats(t *testing.T) {
+	for format, want := range map[string]string{
+		"mermaid": "graph TD",
+		"dot":     `digraph "InitApp"`,
+	} {
+		got, err := Show("../..", []string{"./examples/basic"}, format)
+		if err != nil || !strings.Contains(got, want) || !strings.Contains(got, "n3 -> n4") && !strings.Contains(got, "n3 --> n4") {
+			t.Fatalf("%s: got %q err=%v", format, got, err)
+		}
+	}
+	if _, err := Show("../..", []string{"./examples/basic"}, "svg"); err == nil {
+		t.Fatal("unknown format must fail")
 	}
 }
