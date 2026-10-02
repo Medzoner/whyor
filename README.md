@@ -16,6 +16,7 @@ func InitApp(dsn string) (*App, func(), error) {
 ```
 go run github.com/Medzoner/whyor/cmd/whyor gen ./...    # writes whyor_gen.go
 go run github.com/Medzoner/whyor/cmd/whyor check ./...  # exit 1 if stale
+go run github.com/Medzoner/whyor/cmd/whyor init ./internal/app  # wire.go skeleton
 ```
 
 API:
