@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="510" viewBox="0 0 1000 510" role="img" aria-labelledby="title desc">
+  <title id="title">whyor: explicit dependencies, generated Go</title>
+  <desc id="desc">Constructors and an injector declaration are analyzed by whyor gen to produce plain Go. At runtime the generated injector builds Config, Store and App without a dependency injection container.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101827"/><stop offset="1" stop-color="#18263b"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#5eead4"/></marker>
+  </defs>
+  <rect width="1000" height="510" rx="24" fill="url(#bg)"/>
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <text x="48" y="61" font-size="30" font-weight="700" fill="#f8fafc">Dependencies you can read.</text>
+    <text x="48" y="93" font-size="18" fill="#a9bad0">Declare the graph. Generate the wiring. Ship ordinary Go.</text>
+    <g fill="#1e3046" stroke="#38516b">
+      <rect x="48" y="135" width="262" height="154" rx="14"/>
+      <rect x="365" y="135" width="270" height="154" rx="14" stroke="#5eead4"/>
+      <rect x="690" y="135" width="262" height="154" rx="14"/>
+    </g>
+    <g fill="#5eead4" font-size="13" font-weight="700" letter-spacing="2">
+      <text x="70" y="164">01 / DECLARE</text><text x="387" y="164">02 / GENERATE</text><text x="712" y="164">03 / BUILD</text>
+    </g>
+    <g fill="#f8fafc" font-size="22" font-weight="600">
+      <text x="70" y="204">Constructors + injector</text><text x="387" y="204">whyor gen</text><text x="712" y="204">whyor_gen.go</text>
+    </g>
+    <g fill="#a9bad0" font-size="16">
+      <text x="70" y="238">Parameters are dependencies.</text><text x="70" y="261">Sets describe the wiring.</text>
+      <text x="387" y="238">Resolve types and interfaces.</text><text x="387" y="261">Reject missing providers / cycles.</text>
+      <text x="712" y="238">Inspect it. Commit it.</text><text x="712" y="261">Build without the generator.</text>
+    </g>
+    <g stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"><path d="M318 212H355"/><path d="M643 212H680"/></g>
+    <path d="M48 322H952" stroke="#38516b"/>
+    <text x="48" y="355" font-size="13" font-weight="700" letter-spacing="2" fill="#a9bad0">AT RUNTIME / GENERATED CONSTRUCTOR CALLS</text>
+    <g fill="#142f35" stroke="#38796e"><rect x="48" y="381" width="205" height="65" rx="12"/><rect x="303" y="381" width="205" height="65" rx="12"/><rect x="558" y="381" width="205" height="65" rx="12"/></g>
+    <g fill="#ccfbf1" font-size="19" font-weight="600" text-anchor="middle"><text x="150" y="421">NewConfig()</text><text x="405" y="421">NewStore(config)</text><text x="660" y="421">NewApp(store)</text></g>
+    <g stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"><path d="M261 414H293"/><path d="M516 414H548"/></g>
+    <text x="792" y="404" fill="#f8fafc" font-size="16">No reflection.</text><text x="792" y="431" fill="#f8fafc" font-size="16">No DI container.</text>
+    <text x="48" y="483" fill="#a9bad0" font-size="14">whyor • compile-time dependency injection for Go</text>
+  </g>
+</svg>
