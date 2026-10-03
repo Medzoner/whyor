@@ -193,6 +193,10 @@ whyor.FieldsOf[*Config]("Addr", "Port")   // provides the field types
 If both `T` and `*T` are requested, they are constructed independently.
 Fields exposed by `FieldsOf` must have distinct types, or they collide as providers.
 
+Types are matched using Go's identity rules, including aliases nested in
+signatures, structs and generic type arguments. Distinct defined types are
+not merged, even if their underlying types match.
+
 ## Errors and cleanup
 
 Providers and injectors support these result shapes:
@@ -310,6 +314,7 @@ and behavior differences.
 | [features](examples/features) | `Many`, `AutoBind` and `Closer`. |
 | [structs](examples/structs) | Selected struct fields and `FieldsOf`. |
 | [alias](examples/alias) | Matching an alias and its target type. |
+| [typeidentity](examples/typeidentity) | Nested aliases, equivalent interfaces, instantiated generic types and shared dependencies. |
 | [edge](examples/edge) | Import-name collisions, values and error-path cleanup. |
 
 ## Current limitations
@@ -319,7 +324,6 @@ and behavior differences.
 - Generated code calls providers; it does not copy helpers from tagged files.
 - `Many` does not accept nested `Many`, `Bind`, `AutoBind` or `Closer` declarations.
 - Dependency resolution is type-based: multiple providers of the same type conflict outside `Many`.
-- Alias handling covers common forms; aliases nested in function signatures or anonymous structs are not fully normalized.
 - Watch mode polls every 500 ms under the current directory and excludes generated Go files, `vendor`, `testdata` and hidden directories.
 - Graph exports and diagnostics are evolving alongside the pre-1.0 API.
 

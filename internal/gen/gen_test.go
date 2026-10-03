@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -12,18 +13,49 @@ func TestExampleUpToDate(t *testing.T) {
 	}
 }
 
+func TestAliasIdentityAcrossGenerationAndGraphs(t *testing.T) {
+	const pkg = "./examples/typeidentity"
+	if changed, err := Run("../..", []string{pkg}, false); err != nil || len(changed) != 0 {
+		t.Fatalf("generated example is stale: %v %v", changed, err)
+	}
+	src, err := os.ReadFile("../../examples/typeidentity/whyor_gen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(src), "NewTransform()") != 1 {
+		t.Fatal("alias-equivalent requests must share a single provider call")
+	}
+	for _, format := range []string{"tree", "dot", "mermaid"} {
+		graph, err := Show("../..", []string{pkg}, format)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if format == "tree" {
+			if !strings.Contains(graph, "[NewTransform] (*)") {
+				t.Fatal("tree must recognize the repeated alias-equivalent dependency")
+			}
+		} else if strings.Count(graph, "[NewTransform]") != 1 {
+			t.Fatalf("%s must have one node for the shared function type", format)
+		}
+	}
+}
+
 func TestErrors(t *testing.T) {
 	for name, want := range map[string]string{
-		"missing":     "no provider for",
-		"cycle":       "cycle",
-		"err":         "returns an error",
-		"closer":      "injector returns no cleanup",
-		"many":        "not assignable",
-		"hint":        "hint: *A implements I: add whyor.Bind[I, *A]()",
-		"hintptr":     "a provider for A exists, but not for *A",
-		"notstruct":   "is not a struct",
-		"structfield": "has no exported field Nope",
-		"dup":         "(NewA, NewA2)",
+		"missing":           "no provider for",
+		"cycle":             "cycle",
+		"err":               "returns an error",
+		"closer":            "injector returns no cleanup",
+		"many":              "not assignable",
+		"hint":              "hint: *A implements I: add whyor.Bind[I, *A]()",
+		"hintptr":           "a provider for A exists, but not for *A",
+		"notstruct":         "is not a struct",
+		"structfield":       "has no exported field Nope",
+		"dup":               "(NewA, NewA2)",
+		"identityduplicate": "multiple providers for",
+		"identitycycle":     "dependency cycle",
+		"identityparams":    "multiple parameters of type",
+		"identitygeneric":   "no provider for *Box[string]",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Run("../..", []string{"./internal/gen/testdata/" + name}, false)

@@ -15,24 +15,24 @@ type child struct {
 
 // writeGraph prints the dependency graph of an injector returning out.
 // given holds the injector parameters, keyed by type.
-func (r *resolver) writeGraph(w *strings.Builder, name string, out types.Type, given map[string]string, format string) {
+func (r *resolver) writeGraph(w *strings.Builder, name string, out types.Type, given map[typeID]string, format string) {
 	if format == "tree" {
 		fmt.Fprintf(w, "%s\n", name)
-		r.node(w, child{t: out}, "", true, given, map[string]bool{})
+		r.node(w, child{t: out}, "", true, given, map[typeID]bool{})
 		w.WriteString("\n")
 		return
 	}
-	g := &graph{ids: map[string]string{}}
+	g := &graph{ids: map[typeID]string{}}
 	g.walk(r, child{t: out}, given)
 	g.write(w, name, format)
 }
 
-func (r *resolver) node(w *strings.Builder, c child, prefix string, last bool, given map[string]string, seen map[string]bool) {
+func (r *resolver) node(w *strings.Builder, c child, prefix string, last bool, given map[typeID]string, seen map[typeID]bool) {
 	branch, next := "├── ", "│   "
 	if last {
 		branch, next = "└── ", "    "
 	}
-	k := typeKey(c.t)
+	k := r.f.types.key(c.t)
 	b := c.b
 	if b == nil {
 		if p, ok := given[k]; ok {
@@ -56,8 +56,8 @@ func (r *resolver) node(w *strings.Builder, c child, prefix string, last bool, g
 }
 
 // label is "type [provider]" for a node.
-func (r *resolver) label(c child, b *binding, given map[string]string) string {
-	if p, ok := given[typeKey(c.t)]; ok && c.b == nil {
+func (r *resolver) label(c child, b *binding, given map[typeID]string) string {
+	if p, ok := given[r.f.types.key(c.t)]; ok && c.b == nil {
 		return fmt.Sprintf("%s [parameter %s]", r.f.typ(c.t), p)
 	}
 	return fmt.Sprintf("%s [%s]", r.f.typ(c.t), r.provider(b))
@@ -65,13 +65,13 @@ func (r *resolver) label(c child, b *binding, given map[string]string) string {
 
 // graph is a dependency graph with one node per type, for mermaid and dot.
 type graph struct {
-	ids    map[string]string // type key -> node id
+	ids    map[typeID]string // type identity -> node id
 	labels []string          // by node id index
 	edges  [][2]int
 }
 
-func (g *graph) walk(r *resolver, c child, given map[string]string) int {
-	k := typeKey(c.t)
+func (g *graph) walk(r *resolver, c child, given map[typeID]string) int {
+	k := r.f.types.key(c.t)
 	if id, ok := g.ids[k]; ok && c.b == nil {
 		return indexOf(id)
 	}

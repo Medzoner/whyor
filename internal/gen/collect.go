@@ -76,38 +76,18 @@ func parseResults(sig *types.Signature) (r results, err error) {
 func isError(t types.Type) bool { return types.Identical(t, types.Universe.Lookup("error").Type()) }
 
 func isCleanup(t types.Type) bool {
-	s, ok := t.(*types.Signature)
+	s, ok := types.Unalias(t).(*types.Signature)
 	return ok && s.Params().Len() == 0 && s.Results().Len() == 0
-}
-
-// typeKey identifies a type, seeing through aliases (type X = Y).
-func typeKey(t types.Type) string { return types.TypeString(unalias(t), nil) }
-
-func unalias(t types.Type) types.Type {
-	switch t := types.Unalias(t).(type) {
-	case *types.Pointer:
-		return types.NewPointer(unalias(t.Elem()))
-	case *types.Slice:
-		return types.NewSlice(unalias(t.Elem()))
-	case *types.Array:
-		return types.NewArray(unalias(t.Elem()), t.Len())
-	case *types.Map:
-		return types.NewMap(unalias(t.Key()), unalias(t.Elem()))
-	case *types.Chan:
-		return types.NewChan(t.Dir(), unalias(t.Elem()))
-	default:
-		return t
-	}
 }
 
 // collector expands the arguments of Build into bindings.
 type collector struct {
 	f        *file
-	bindings map[string]*binding
+	bindings map[typeID]*binding
 	visiting map[token.Pos]bool
 	many     *[]*binding     // set while collecting the elements of a Many
 	autos    []types.Type    // AutoBind types
-	closers  map[string]bool // type keys registered with Closer
+	closers  map[typeID]bool // type identities registered with Closer
 }
 
 func (c *collector) add(b *binding) error {
@@ -115,7 +95,7 @@ func (c *collector) add(b *binding) error {
 		*c.many = append(*c.many, b)
 		return nil
 	}
-	k := typeKey(b.out)
+	k := c.f.types.key(b.out)
 	if old, ok := c.bindings[k]; ok && (old.fn == nil || old.fn != b.fn) {
 		return fmt.Errorf("multiple providers for %s (%s, %s)", c.f.typ(b.out), old.describe(), b.describe())
 	}
@@ -164,7 +144,7 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 			} else if _, err := closeStmt(targs[0], "x"); err != nil {
 				return fmt.Errorf("%s: Closer: %w", at, err)
 			} else {
-				c.closers[typeKey(targs[0])] = true
+				c.closers[c.f.types.key(targs[0])] = true
 			}
 			return nil
 		case "Bind":

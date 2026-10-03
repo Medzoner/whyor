@@ -22,6 +22,7 @@ type file struct {
 	body    bytes.Buffer
 	opts    options
 	tree    *strings.Builder // set by Show: print dependency trees instead of code
+	types   typeIndex
 }
 
 func newFile(pkg *packages.Package, decls map[token.Pos]varDecl) *file {
@@ -108,7 +109,7 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 		return err
 	}
 
-	c := &collector{f: f, bindings: map[string]*binding{}, visiting: map[token.Pos]bool{}, closers: map[string]bool{}}
+	c := &collector{f: f, bindings: map[typeID]*binding{}, visiting: map[token.Pos]bool{}, closers: map[typeID]bool{}}
 	for _, a := range call.Args {
 		if err := c.collect(a, f.pkg); err != nil {
 			return err
@@ -116,7 +117,7 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	}
 
 	r := &resolver{f: f, res: res, bindings: c.bindings, autos: c.autos, closers: c.closers,
-		done: map[string]string{}, fns: map[*types.Func]string{}}
+		done: map[typeID]string{}, fns: map[*types.Func]string{}}
 	var params []string
 	for i := range sig.Params().Len() {
 		p := sig.Params().At(i)
@@ -124,10 +125,10 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 		if name == "" || name == "_" {
 			name = fmt.Sprintf("arg%d", i)
 		}
-		if _, dup := r.done[typeKey(p.Type())]; dup {
+		if _, dup := r.done[f.types.key(p.Type())]; dup {
 			return fmt.Errorf("multiple parameters of type %s", f.typ(p.Type()))
 		}
-		r.done[typeKey(p.Type())] = name
+		r.done[f.types.key(p.Type())] = name
 		params = append(params, name+" "+f.typ(p.Type()))
 	}
 	given := maps.Clone(r.done)

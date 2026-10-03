@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"go/types"
@@ -13,24 +14,24 @@ import (
 type resolver struct {
 	f        *file
 	res      results
-	bindings map[string]*binding
-	done     map[string]string // type key -> variable holding its value
+	bindings map[typeID]*binding
+	done     map[typeID]string // type identity -> variable holding its value
 	stack    []types.Type      // types being resolved, to report cycles
 	lines    strings.Builder
 	cleanups []string // statements releasing what was acquired, in acquisition order
 	autos    []types.Type
-	closers  map[string]bool
+	closers  map[typeID]bool
 	fns      map[*types.Func]string // provider -> variable, so each runs once
 	n        int
 }
 
 func (r *resolver) resolve(t types.Type) (string, error) {
-	k := typeKey(t)
+	k := r.f.types.key(t)
 	if v, ok := r.done[k]; ok {
 		return v, nil
 	}
 	for _, s := range r.stack {
-		if typeKey(s) == k {
+		if types.Identical(s, t) {
 			return "", fmt.Errorf("dependency cycle: %s", r.path(t))
 		}
 	}
@@ -56,7 +57,7 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 }
 
 func (r *resolver) lookup(t types.Type) (*binding, bool) {
-	if b, ok := r.bindings[typeKey(t)]; ok {
+	if b, ok := r.bindings[r.f.types.key(t)]; ok {
 		return b, true
 	}
 	return r.autoBind(t)
@@ -64,16 +65,21 @@ func (r *resolver) lookup(t types.Type) (*binding, bool) {
 
 // hint suggests how to provide t from what is already registered.
 func (r *resolver) hint(t types.Type) string {
-	for _, k := range slices.Sorted(maps.Keys(r.bindings)) {
-		o := r.bindings[k].out
+	bindings := slices.Collect(maps.Values(r.bindings))
+	// Sort only for stable diagnostics, never for deciding type identity.
+	slices.SortFunc(bindings, func(a, b *binding) int {
+		return cmp.Compare(types.TypeString(a.out, nil), types.TypeString(b.out, nil))
+	})
+	for _, b := range bindings {
+		o := b.out
 		if iface, ok := t.Underlying().(*types.Interface); ok && !types.IsInterface(o) && types.Implements(o, iface) {
 			return fmt.Sprintf("%s implements %s: add whyor.Bind[%s, %s]() or whyor.AutoBind[%s]()",
 				r.f.typ(o), r.f.typ(t), r.f.typ(t), r.f.typ(o), r.f.typ(o))
 		}
-		if p, ok := o.(*types.Pointer); ok && typeKey(p.Elem()) == typeKey(t) {
+		if p, ok := types.Unalias(o).(*types.Pointer); ok && types.Identical(p.Elem(), t) {
 			return fmt.Sprintf("a provider for %s exists, but not for %s", r.f.typ(o), r.f.typ(t))
 		}
-		if p, ok := t.(*types.Pointer); ok && typeKey(p.Elem()) == k {
+		if p, ok := types.Unalias(t).(*types.Pointer); ok && types.Identical(p.Elem(), o) {
 			return fmt.Sprintf("a provider for %s exists, but not for %s", r.f.typ(o), r.f.typ(t))
 		}
 	}
@@ -163,7 +169,7 @@ func (r *resolver) emit(b *binding) (string, error) {
 	}
 
 	closer := false
-	if !b.res.cleanup && r.closers[typeKey(b.out)] {
+	if !b.res.cleanup && r.closers[r.f.types.key(b.out)] {
 		if !r.res.cleanup {
 			return "", fmt.Errorf("%s has a Closer but the injector returns no cleanup", r.f.typ(b.out))
 		}
@@ -239,7 +245,7 @@ func closeStmt(t types.Type, v string) (string, error) {
 	obj, _, _ := types.LookupFieldOrMethod(t, true, nil, "Close")
 	fn, _ := obj.(*types.Func)
 	if fn == nil {
-		return "", fmt.Errorf("%s has no Close method", typeKey(t))
+		return "", fmt.Errorf("%s has no Close method", types.TypeString(t, nil))
 	}
 	sig := fn.Type().(*types.Signature)
 	switch {
@@ -249,5 +255,5 @@ func closeStmt(t types.Type, v string) (string, error) {
 	case sig.Results().Len() == 1 && isError(sig.Results().At(0).Type()):
 		return "_ = " + v + ".Close()", nil
 	}
-	return "", fmt.Errorf("%s: Close must be func() or func() error", typeKey(t))
+	return "", fmt.Errorf("%s: Close must be func() or func() error", types.TypeString(t, nil))
 }
