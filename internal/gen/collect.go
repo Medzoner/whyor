@@ -17,17 +17,18 @@ import (
 // binding says how to obtain a value of type out: by calling a provider
 // function, by aliasing a concrete type (target), or from a literal (expr).
 type binding struct {
-	out    types.Type
-	fn     *types.Func
-	ins    []types.Type
-	res    results
-	target types.Type
-	expr   string
-	fields []string   // Struct: fields of the struct literal, in order (ins hold their types)
-	ptr    bool       // Struct: build &T{} instead of T{}
-	field  string     // FieldsOf: field read from ins[0]
-	many   bool       // a []T built from elems
-	elems  []*binding // elements of a Many
+	position token.Position
+	out      types.Type
+	fn       *types.Func
+	ins      []types.Type
+	res      results
+	target   types.Type
+	expr     string
+	fields   []string   // Struct: fields of the struct literal, in order (ins hold their types)
+	ptr      bool       // Struct: build &T{} instead of T{}
+	field    string     // FieldsOf: field read from ins[0]
+	many     bool       // a []T built from elems
+	elems    []*binding // elements of a Many
 }
 
 func (b *binding) describe() string {
@@ -97,7 +98,8 @@ func (c *collector) add(b *binding) error {
 	}
 	k := c.f.types.key(b.out)
 	if old, ok := c.bindings[k]; ok && (old.fn == nil || old.fn != b.fn) {
-		return fmt.Errorf("multiple providers for %s (%s, %s)", c.f.typ(b.out), old.describe(), b.describe())
+		return fmt.Errorf("multiple providers for %s (%s, %s)\n\tfirst: %s\n\tsecond: %s",
+			c.f.typ(b.out), old.describe(), b.describe(), old.position, b.position)
 	}
 	c.bindings[k] = b
 	return nil
@@ -134,7 +136,7 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 					return fmt.Errorf("%s: Many: %s is not assignable to %s", at, c.f.typ(e.out), c.f.typ(targs[0]))
 				}
 			}
-			return c.add(&binding{out: types.NewSlice(targs[0]), many: true, elems: elems})
+			return c.add(&binding{position: at, out: types.NewSlice(targs[0]), many: true, elems: elems})
 		case "AutoBind", "Closer":
 			if len(targs) != 1 || c.many != nil {
 				break
@@ -154,7 +156,7 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 			if iface, ok := targs[0].Underlying().(*types.Interface); !ok || !types.Implements(targs[1], iface) {
 				return fmt.Errorf("%s: Bind: %s does not implement %s", at, c.f.typ(targs[1]), c.f.typ(targs[0]))
 			}
-			return c.add(&binding{out: targs[0], target: targs[1]})
+			return c.add(&binding{position: at, out: targs[0], target: targs[1]})
 		case "Struct":
 			if len(targs) != 1 || c.many != nil {
 				break
@@ -173,7 +175,7 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 			if err != nil {
 				return err
 			}
-			return c.add(&binding{out: targs[0], expr: s})
+			return c.add(&binding{position: at, out: targs[0], expr: s})
 		}
 	case *ast.Ident, *ast.SelectorExpr:
 		id, ok := v.(*ast.Ident)
@@ -208,7 +210,7 @@ func (c *collector) addFunc(fn *types.Func, at token.Position) error {
 	if err != nil {
 		return fmt.Errorf("%s: provider %s: %w", at, fn.Name(), err)
 	}
-	b := &binding{out: res.out, fn: fn, res: res}
+	b := &binding{position: c.f.pkg.Fset.Position(fn.Pos()), out: res.out, fn: fn, res: res}
 	for p := range sig.Params().Variables() {
 		b.ins = append(b.ins, p.Type())
 	}
@@ -261,7 +263,7 @@ func (c *collector) addStruct(t types.Type, call *ast.CallExpr, p *packages.Pack
 			}
 		}
 	}
-	b := &binding{out: t, fields: []string{}}
+	b := &binding{position: at, out: t, fields: []string{}}
 	for _, name := range names {
 		i := slices.IndexFunc(structFields(st), func(f *types.Var) bool { return f.Name() == name })
 		if i < 0 || !st.Field(i).Exported() {
@@ -321,7 +323,7 @@ func (c *collector) addFieldsOf(t types.Type, call *ast.CallExpr, p *packages.Pa
 		if !ok || !fv.IsField() {
 			return fmt.Errorf("%s: FieldsOf: %s has no field %s", at, c.f.typ(t), name)
 		}
-		if err := c.add(&binding{out: fv.Type(), ins: []types.Type{t}, field: name}); err != nil {
+		if err := c.add(&binding{position: at, out: fv.Type(), ins: []types.Type{t}, field: name}); err != nil {
 			return err
 		}
 	}

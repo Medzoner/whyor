@@ -32,11 +32,20 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 	}
 	for _, s := range r.stack {
 		if types.Identical(s, t) {
-			return "", fmt.Errorf("dependency cycle: %s", r.path(t))
+			return "", r.failure(fmt.Errorf("dependency cycle: %s", r.path(t)), t)
 		}
 	}
 	b, ok := r.lookup(t)
 	if !ok {
+		if candidates := r.autoCandidates(t); len(candidates) > 1 {
+			names := make([]string, len(candidates))
+			for i, candidate := range candidates {
+				names[i] = r.f.typ(candidate)
+			}
+			slices.Sort(names)
+			return "", r.failure(fmt.Errorf("ambiguous AutoBind for %s: %s; use an explicit whyor.Bind",
+				r.f.typ(t), strings.Join(names, ", ")), t)
+		}
 		msg := "no provider for " + r.f.typ(t)
 		if len(r.stack) > 0 {
 			msg += " (needed by " + r.f.typ(r.stack[len(r.stack)-1]) + ")"
@@ -44,16 +53,17 @@ func (r *resolver) resolve(t types.Type) (string, error) {
 		if h := r.hint(t); h != "" {
 			msg += "\n\thint: " + h
 		}
-		return "", errors.New(msg)
+		return "", r.failure(errors.New(msg), t)
 	}
 	r.stack = append(r.stack, t)
 	defer func() { r.stack = r.stack[:len(r.stack)-1] }()
 
 	v, err := r.emit(b)
-	if err == nil {
-		r.done[k] = v
+	if err != nil {
+		return "", r.failure(err, nil)
 	}
-	return v, err
+	r.done[k] = v
+	return v, nil
 }
 
 func (r *resolver) lookup(t types.Type) (*binding, bool) {
@@ -88,20 +98,28 @@ func (r *resolver) hint(t types.Type) string {
 
 // autoBind finds the single AutoBind type implementing interface t.
 func (r *resolver) autoBind(t types.Type) (*binding, bool) {
-	iface, ok := t.Underlying().(*types.Interface)
-	if !ok {
-		return nil, false
-	}
-	var found []types.Type
-	for _, a := range r.autos {
-		if types.Implements(a, iface) {
-			found = append(found, a)
-		}
-	}
+	found := r.autoCandidates(t)
 	if len(found) != 1 {
 		return nil, false
 	}
 	return &binding{out: t, target: found[0]}, true
+}
+
+func (r *resolver) autoCandidates(t types.Type) []types.Type {
+	iface, ok := t.Underlying().(*types.Interface)
+	if !ok {
+		return nil
+	}
+	var found []types.Type
+	seen := map[typeID]bool{}
+	for _, a := range r.autos {
+		id := r.f.types.key(a)
+		if !seen[id] && types.Implements(a, iface) {
+			found = append(found, a)
+			seen[id] = true
+		}
+	}
+	return found
 }
 
 func (r *resolver) emit(b *binding) (string, error) {

@@ -245,6 +245,7 @@ Package patterns default to `./...`.
 | `whyor show ./...` | Display dependency trees. |
 | `whyor show -f mermaid ./...` | Export Mermaid graphs. |
 | `whyor show -f dot ./...` | Export Graphviz graphs. |
+| `whyor show -f json ./...` | Export a versioned document containing all matching injectors. |
 | `whyor init ./internal/app` | Create a declaration skeleton without overwriting `wire.go`. |
 
 ### Understand your dependency graph
@@ -264,6 +265,41 @@ code reviews and architecture documentation. With Graphviz installed:
 ```sh
 whyor show -f dot ./internal/app | dot -Tsvg > dependencies.svg
 ```
+
+### Integrate with your tools
+
+```sh
+whyor show -f json ./... > dependencies.json
+```
+
+The JSON document contains `version: 1` and a `graphs` array. Each graph has
+its package, injector, source position, root node ID, nodes and edges. Nodes
+identify their type and provider (or injector parameter); source positions
+are included where available. Edges point **from a consumer to its dependency**.
+Node IDs are local to each injector, not persistent identifiers across code changes.
+Positions use the paths reported by the Go loader, which can be absolute.
+
+An invalid injector returns an error rather than partial JSON. No matching
+injectors produces an empty `graphs` array.
+
+### Follow a failed resolution
+
+Errors include the path from the injector's result to the dependency that
+cannot be built, including provider and binding locations:
+
+```text
+wire.go:20:8: Init: no provider for *DB (needed by *Postgres)
+    dependency path:
+      *Server [NewServer] at providers.go:10:6
+      → *App [NewApp] at providers.go:9:6
+      → Store [Bind] at wire.go:20:50
+      → *Postgres [NewPostgres] at providers.go:8:6
+      → *DB
+```
+
+Ambiguous automatic bindings name the candidate types and suggest an explicit
+`Bind`, rather than reporting a misleading missing provider. Duplicate
+providers report both source positions.
 
 ### Automate generation
 

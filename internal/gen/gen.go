@@ -3,6 +3,7 @@ package gen
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -54,22 +55,30 @@ func Run(dir string, patterns []string, write bool) ([]string, error) {
 	return changed, nil
 }
 
-// Show returns the dependency graph of every injector, as a tree, mermaid or dot. in the matching packages.
+// Show returns the matching injectors' dependency graphs as tree, mermaid, dot or JSON.
 func Show(dir string, patterns []string, format string) (string, error) {
-	if format != "tree" && format != "mermaid" && format != "dot" {
-		return "", fmt.Errorf("unknown format %q (want tree, mermaid or dot)", format)
+	if format != "tree" && format != "mermaid" && format != "dot" && format != "json" {
+		return "", fmt.Errorf("unknown format %q (want tree, mermaid, dot or json)", format)
 	}
 	pkgs, decls, err := load(dir, patterns)
 	if err != nil {
 		return "", err
 	}
 	var out strings.Builder
+	document := graphDocument{Version: 1, Graphs: []injectorGraph{}}
 	for _, pkg := range pkgs {
-		tree, err := generate(pkg, decls, options{show: true, format: format})
+		tree, err := generate(pkg, decls, options{show: true, format: format, document: &document})
 		if err != nil {
 			return "", err
 		}
 		out.Write(tree)
+	}
+	if format == "json" {
+		data, err := json.MarshalIndent(document, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("encode graph: %w", err)
+		}
+		return string(data) + "\n", nil
 	}
 	return out.String(), nil
 }
@@ -128,9 +137,10 @@ type usage struct {
 
 // options tune a generate run.
 type options struct {
-	show   bool   // print dependency graphs instead of code
-	format string // graph format when show is set
-	use    *usage // when set, record provider usage
+	show     bool           // print dependency graphs instead of code
+	format   string         // graph format when show is set
+	use      *usage         // when set, record provider usage
+	document *graphDocument // aggregate JSON graphs across packages
 }
 
 // varDecl is a package-level `var x = expr`, used to expand sets.

@@ -140,6 +140,11 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 		f.record(c, r)
 	}
 	if f.tree != nil {
+		if f.opts.format == "json" {
+			g := r.jsonGraph(fd.Name.Name, f.pkg.Fset.Position(fd.Pos()).String(), res.out, given)
+			f.opts.document.Graphs = append(f.opts.document.Graphs, g)
+			return nil
+		}
 		r.writeGraph(f.tree, fd.Name.Name, res.out, given, f.opts.format)
 		return nil
 	}

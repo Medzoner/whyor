@@ -14,7 +14,7 @@ import (
 const usage = `usage:
   whyor gen   [-w] [packages]   write whyor_gen.go files (-w: regenerate on change)
   whyor check [packages]   exit 1 if generated files are stale
-  whyor show  [-f tree|mermaid|dot] [packages]   print each injector's dependencies
+  whyor show  [-f tree|mermaid|dot|json] [packages]   print each injector's dependencies
   whyor unused [packages]  list providers no injector calls (exit 1 if any)
   whyor init  [dir]        create a wire.go skeleton`
 

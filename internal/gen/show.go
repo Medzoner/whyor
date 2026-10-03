@@ -22,7 +22,7 @@ func (r *resolver) writeGraph(w *strings.Builder, name string, out types.Type, g
 		w.WriteString("\n")
 		return
 	}
-	g := &graph{ids: map[typeID]string{}}
+	g := &graph{ids: map[nodeKey]int{}}
 	g.walk(r, child{t: out}, given)
 	g.write(w, name, format)
 }
@@ -63,37 +63,59 @@ func (r *resolver) label(c child, b *binding, given map[typeID]string) string {
 	return fmt.Sprintf("%s [%s]", r.f.typ(c.t), r.provider(b))
 }
 
-// graph is a dependency graph with one node per type, for mermaid and dot.
+// nodeKey separates providers returning the same type inside Many while
+// merging calls to the same function across Many and standalone dependencies.
+type nodeKey struct {
+	typeID typeID
+	fn     *types.Func
+	value  *binding
+}
+
+// graph is a dependency graph for mermaid, dot and JSON.
 type graph struct {
-	ids    map[typeID]string // type identity -> node id
-	labels []string          // by node id index
+	ids    map[nodeKey]int
+	labels []string // by node id index
 	edges  [][2]int
+	nodes  []graphNode
 }
 
 func (g *graph) walk(r *resolver, c child, given map[typeID]string) int {
 	k := r.f.types.key(c.t)
-	if id, ok := g.ids[k]; ok && c.b == nil {
-		return indexOf(id)
-	}
 	b := c.b
 	if b == nil {
-		b, _ = r.lookup(c.t)
+		if _, isParam := given[k]; !isParam {
+			b, _ = r.lookup(c.t)
+		}
+	}
+	key := nodeKey{typeID: k}
+	if b != nil {
+		key.fn = b.fn
+	}
+	if c.b != nil && b.fn == nil {
+		key.value = b
+	}
+	if id, ok := g.ids[key]; ok {
+		return id
 	}
 	n := len(g.labels)
-	g.ids[k] = fmt.Sprintf("n%d", n)
+	g.ids[key] = n
 	g.labels = append(g.labels, r.label(c, b, given))
+	node := graphNode{ID: fmt.Sprintf("n%d", n), Type: r.f.typ(c.t)}
+	if parameter, ok := given[k]; ok && c.b == nil {
+		node.Parameter = parameter
+	} else {
+		node.Provider = r.provider(b)
+		if b.position.IsValid() {
+			node.Position = b.position.String()
+		}
+	}
+	g.nodes = append(g.nodes, node)
 	if _, isParam := given[k]; isParam && c.b == nil {
 		return n
 	}
 	for _, kid := range children(b) {
 		g.edges = append(g.edges, [2]int{n, g.walk(r, kid, given)})
 	}
-	return n
-}
-
-func indexOf(id string) int {
-	var n int
-	fmt.Sscanf(id, "n%d", &n)
 	return n
 }
 
@@ -141,7 +163,7 @@ func children(b *binding) []child {
 func (r *resolver) provider(b *binding) string {
 	switch {
 	case b.fn != nil && b.fn.Pkg() != r.f.pkg.Types:
-		return b.fn.Pkg().Name() + "." + b.fn.Name()
+		return r.f.qual(b.fn.Pkg()) + "." + b.fn.Name()
 	case b.field != "":
 		return "field " + b.field
 	case b.target != nil:
