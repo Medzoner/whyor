@@ -63,6 +63,13 @@ These were long-standing open requests on Wire.
 
 ## Behaviour differences
 
+For error-aware shutdown, an injector may return `whyor.Cleanup`
+(`func(context.Context) error`) instead of `func()`. Legacy provider cleanups
+are adapted, while modern provider cleanups require a modern injector result.
+Cleanup and `Close()` errors are joined; errors during rollback are joined
+with the initialization error. See the README lifecycle section for context
+and deadline semantics. Keeping `func()` preserves the legacy behavior.
+
 - A provider runs once per injector, however many times its result is used.
 - `Many` elements are not provided as their own type; add the provider outside
   the `Many` too if something else needs it.

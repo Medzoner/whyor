@@ -129,6 +129,9 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 			return fmt.Errorf("multiple parameters of type %s", f.typ(p.Type()))
 		}
 		r.done[f.types.key(p.Type())] = name
+		if isContext(p.Type()) {
+			r.initContext = name
+		}
 		params = append(params, name+" "+f.typ(p.Type()))
 	}
 	given := maps.Clone(r.done)
@@ -152,7 +155,7 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	rets := []string{f.typ(res.out)}
 	ret := out
 	if res.cleanup {
-		rets = append(rets, "func()")
+		rets = append(rets, f.typ(res.cleanupType))
 		ret += ", " + r.cleanupFunc()
 	}
 	if res.err {

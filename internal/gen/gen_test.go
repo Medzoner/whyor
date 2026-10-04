@@ -56,6 +56,7 @@ func TestErrors(t *testing.T) {
 		"identitycycle":     "dependency cycle",
 		"identityparams":    "multiple parameters of type",
 		"identitygeneric":   "no provider for *Box[string]",
+		"lifecyclerejected": "injector must return whyor.Cleanup",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Run("../..", []string{"./internal/gen/testdata/" + name}, false)

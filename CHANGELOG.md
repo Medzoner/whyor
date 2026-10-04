@@ -6,6 +6,39 @@ whyor is pre-1.0; review release notes before upgrading.
 
 ## [Unreleased]
 
+## [v0.10.0]
+
+### Added
+
+- `whyor.Cleanup`, a `func(context.Context) error` type for explicit shutdown.
+- Providers and injectors may return context-aware cleanup functions. Legacy
+  `func()` provider cleanups can be mixed into a modern injector.
+- Modern cleanup calls execute in reverse order and aggregate errors with
+  `errors.Join`. `Closer` errors are preserved in modern injectors.
+- Failed initialization aggregates its error with errors from acquired cleanups.
+  Rollback preserves injector context values through `context.WithoutCancel`,
+  or uses `context.Background()` when no context parameter exists.
+- Lifecycle examples and tests covering shutdown context propagation, canceled
+  acquisition contexts, mixed cleanups, rollback and empty cleanup functions.
+
+### Upgrade notes
+
+- Existing `func()` cleanup declarations retain their behavior. Modern provider
+  cleanups require an injector returning `whyor.Cleanup` or the equivalent
+  function signature; they cannot silently lose errors in a legacy injector.
+- Shutdown context is supplied by the caller and passed unchanged. Rollback
+  strips acquisition cancellation and deadlines; no timeout is added. Cleanup
+  implementations must bound blocking operations themselves.
+- Cleanups are cooperative, synchronous and not automatically idempotent.
+- Requires Go **1.27.1+**. JSON graph schema stays at version `1`.
+
+```sh
+go install github.com/Medzoner/whyor/cmd/whyor@v0.10.0
+go get github.com/Medzoner/whyor@v0.10.0
+whyor gen ./...
+go test ./...
+```
+
 ## [v0.9.0]
 
 ### Added
@@ -91,6 +124,7 @@ whyor gen ./...
 go test ./...
 ```
 
-[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.10.0...HEAD
+[v0.10.0]: https://github.com/Medzoner/whyor/compare/v0.9.0...v0.10.0
 [v0.9.0]: https://github.com/Medzoner/whyor/compare/v0.8.0...v0.9.0
 [v0.8.0]: https://github.com/Medzoner/whyor/compare/v0.7.1...v0.8.0

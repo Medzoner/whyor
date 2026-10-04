@@ -12,6 +12,12 @@
 // Nothing in this package does any work at runtime.
 package whyor
 
+import "context"
+
+// Cleanup releases resources using a caller-supplied shutdown context.
+// Generated cleanup calls run in reverse acquisition order and aggregate errors.
+type Cleanup func(context.Context) error
+
 // Option is a provider, a Set, a Bind or a Value accepted by Build and Set.
 // Plain provider functions are accepted too.
 type Option any
@@ -43,8 +49,9 @@ func Many[T any](opts ...Option) Option { return nil }
 // as long as exactly one registered AutoBind type implements that interface.
 func AutoBind[T any]() Option { return nil }
 
-// Closer registers T's Close method as its cleanup: the injector must then
-// return a func(). It applies to providers of T that have no cleanup of their own.
+// Closer registers T's Close method as its cleanup: the injector must return
+// func() or Cleanup. Close errors are preserved with Cleanup, discarded with func().
+// It applies to providers of T that have no cleanup of their own.
 func Closer[T any]() Option { return nil }
 
 // Value provides the given expression as a dependency of type T.

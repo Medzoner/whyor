@@ -58,15 +58,18 @@ func (b *binding) describe() string {
 
 // results describes the shape `T, [func()], [error]` of providers and injectors.
 type results struct {
-	out     types.Type
-	cleanup bool
-	err     bool
+	out         types.Type
+	cleanup     bool
+	err         bool
+	cleanupType types.Type
+	lifecycle   bool
 }
 
 func parseResults(sig *types.Signature) (r results, err error) {
+	const shape = "results must be T, [func() or func(context.Context) error], [error]"
 	rs := sig.Results()
 	if rs.Len() == 0 || rs.Len() > 3 {
-		return r, fmt.Errorf("results must be T, [func()], [error]")
+		return r, fmt.Errorf("%s", shape)
 	}
 	r.out = rs.At(0).Type()
 	for i := 1; i < rs.Len(); i++ {
@@ -74,10 +77,12 @@ func parseResults(sig *types.Signature) (r results, err error) {
 		switch {
 		case isError(t) && i == rs.Len()-1:
 			r.err = true
-		case isCleanup(t) && i == 1:
+		case (isCleanup(t) || isLifecycleCleanup(t)) && i == 1:
 			r.cleanup = true
+			r.cleanupType = t
+			r.lifecycle = isLifecycleCleanup(t)
 		default:
-			return r, fmt.Errorf("results must be T, [func()], [error]")
+			return r, fmt.Errorf("%s", shape)
 		}
 	}
 	return r, nil
@@ -86,8 +91,19 @@ func parseResults(sig *types.Signature) (r results, err error) {
 func isError(t types.Type) bool { return types.Identical(t, types.Universe.Lookup("error").Type()) }
 
 func isCleanup(t types.Type) bool {
-	s, ok := types.Unalias(t).(*types.Signature)
+	s, ok := t.Underlying().(*types.Signature)
 	return ok && s.Params().Len() == 0 && s.Results().Len() == 0
+}
+
+func isLifecycleCleanup(t types.Type) bool {
+	s, ok := t.Underlying().(*types.Signature)
+	return ok && !s.Variadic() && s.Params().Len() == 1 && isContext(s.Params().At(0).Type()) &&
+		s.Results().Len() == 1 && isError(s.Results().At(0).Type())
+}
+
+func isContext(t types.Type) bool {
+	n, ok := types.Unalias(t).(*types.Named)
+	return ok && n.Obj().Pkg() != nil && n.Obj().Pkg().Path() == "context" && n.Obj().Name() == "Context"
 }
 
 // collector expands the arguments of Build into bindings.

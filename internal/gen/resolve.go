@@ -12,17 +12,24 @@ import (
 
 // resolver turns the dependency graph of one injector into straight-line code.
 type resolver struct {
-	f        *file
-	res      results
-	bindings map[typeID]*binding
-	done     map[typeID]string // type identity -> variable holding its value
-	stack    []types.Type      // types being resolved, to report cycles
-	lines    strings.Builder
-	cleanups []string // statements releasing what was acquired, in acquisition order
-	autos    []types.Type
-	closers  map[typeID]bool
-	fns      map[providerKey]string // provider instantiation -> variable
-	n        int
+	f           *file
+	res         results
+	bindings    map[typeID]*binding
+	done        map[typeID]string // type identity -> variable holding its value
+	stack       []types.Type      // types being resolved, to report cycles
+	lines       strings.Builder
+	cleanups    []cleanupCall // resources to release, in acquisition order
+	autos       []types.Type
+	closers     map[typeID]bool
+	fns         map[providerKey]string // provider instantiation -> variable
+	n           int
+	initContext string
+}
+
+type cleanupCall struct {
+	name    string
+	context bool
+	err     bool
 }
 
 func (r *resolver) resolve(t types.Type) (string, error) {
@@ -186,6 +193,9 @@ func (r *resolver) emit(b *binding) (string, error) {
 	if b.res.cleanup && !r.res.cleanup {
 		return "", fmt.Errorf("provider %s returns a cleanup but the injector does not", b.fn.Name())
 	}
+	if b.res.lifecycle && !r.res.lifecycle {
+		return "", fmt.Errorf("provider %s returns a context-aware cleanup; the injector must return whyor.Cleanup or func(context.Context) error", r.f.callName(b))
+	}
 
 	closer := false
 	if !b.res.cleanup && r.closers[r.f.types.key(b.out)] {
@@ -206,14 +216,14 @@ func (r *resolver) emit(b *binding) (string, error) {
 	callee := r.f.callName(b)
 	fmt.Fprintf(&r.lines, "\t%s := %s(%s)\n", strings.Join(lhs, ", "), callee, strings.Join(args, ", "))
 	if b.res.err {
-		fmt.Fprintf(&r.lines, "\tif err != nil {\n%s\t\treturn %s\n\t}\n", r.cleanupCalls("\t\t"), r.failReturn())
+		fmt.Fprintf(&r.lines, "\tif err != nil {\n%s\t\treturn %s\n\t}\n", r.cleanupCalls("\t\t", r.failureContext()), r.failReturn())
 	}
 	if b.res.cleanup {
-		r.cleanups = append(r.cleanups, "cleanup"+v[1:]+"()")
+		r.cleanups = append(r.cleanups, cleanupCall{name: "cleanup" + v[1:], context: b.res.lifecycle, err: b.res.lifecycle})
 	}
 	if closer {
 		stmt, _ := closeStmt(b.out, v)
-		r.cleanups = append(r.cleanups, stmt)
+		r.cleanups = append(r.cleanups, cleanupCall{name: v + ".Close", err: strings.HasPrefix(stmt, "_ = ")})
 	}
 	r.fns[key] = v
 	return v, nil
@@ -225,10 +235,22 @@ func (r *resolver) next() string {
 }
 
 // cleanupCalls calls the cleanups acquired so far, in reverse order.
-func (r *resolver) cleanupCalls(indent string) string {
+func (r *resolver) cleanupCalls(indent, ctx string) string {
 	var b strings.Builder
 	for _, c := range slices.Backward(r.cleanups) {
-		b.WriteString(indent + c + "\n")
+		args := ""
+		if c.context {
+			args = ctx
+		}
+		call := fmt.Sprintf("%s(%s)", c.name, args)
+		if c.err {
+			if r.res.lifecycle {
+				call = fmt.Sprintf("err = %s.Join(err, %s)", r.standardPackage("errors"), call)
+			} else {
+				call = "_ = " + call
+			}
+		}
+		fmt.Fprintf(&b, "%s%s\n", indent, call)
 	}
 	return b.String()
 }
@@ -242,10 +264,39 @@ func (r *resolver) failReturn() string {
 }
 
 func (r *resolver) cleanupFunc() string {
+	if r.res.lifecycle {
+		return fmt.Sprintf("func(_cleanupCtx %s.Context) error {\n\t\tvar err error\n%s\t\treturn err\n\t}",
+			r.standardPackage("context"), r.cleanupCalls("\t\t", "_cleanupCtx"))
+	}
 	if len(r.cleanups) == 0 {
 		return "func() {}"
 	}
-	return "func() {\n" + r.cleanupCalls("\t\t") + "\t}"
+	return "func() {\n" + r.cleanupCalls("\t\t", "") + "\t}"
+}
+
+// Failed initialization must not pass a canceled acquisition context to cleanup.
+// Preserve values with WithoutCancel when an injector context is available.
+func (r *resolver) failureContext() string {
+	if !r.res.lifecycle {
+		return ""
+	}
+	for _, c := range r.cleanups {
+		if c.context {
+			pkg := r.standardPackage("context")
+			if r.initContext != "" {
+				return fmt.Sprintf("%s.WithoutCancel(%s)", pkg, r.initContext)
+			}
+			return fmt.Sprintf("%s.Background()", pkg)
+		}
+	}
+	return ""
+}
+
+func (r *resolver) standardPackage(path string) string {
+	if pkg, ok := r.f.pkg.Imports[path]; ok {
+		return r.f.qual(pkg.Types)
+	}
+	return r.f.qual(types.NewPackage(path, path))
 }
 
 func (r *resolver) path(t types.Type) string {

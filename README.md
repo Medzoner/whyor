@@ -169,6 +169,7 @@ not copy their definitions into the generated file.
 | `Many[T](providers...)` | Construct a `[]T` from multiple providers. |
 | `AutoBind[T]()` | Select `T` for requested interfaces it implements, when unambiguous. |
 | `Closer[T]()` | Register `T.Close()` as cleanup for a provider without its own cleanup. |
+| `Cleanup` | A `func(context.Context) error` type for explicit, error-aware shutdown. |
 
 ### Collect implementations into a slice
 
@@ -237,6 +238,8 @@ T
 (T, error)
 (T, func())
 (T, func(), error)
+(T, whyor.Cleanup)
+(T, whyor.Cleanup, error)
 ```
 
 If a reachable provider returns an error or cleanup, the injector must expose
@@ -259,9 +262,52 @@ On error, each provider must release resources it acquired internally; the
 injector only calls cleanups returned by previously successful providers.
 
 For types that already have `Close()` or `Close() error`, add
-`whyor.Closer[*DB]()`. The injector must return `func()`; a provider's explicit
-cleanup takes precedence. **Errors returned by `Close()` are discarded** by
-the generated cleanup. Cleanup functions should be non-nil on successful construction.
+`whyor.Closer[*DB]()`. A provider's explicit cleanup takes precedence. With
+a legacy `func()` injector, errors returned by `Close()` are discarded; with
+`whyor.Cleanup`, they are aggregated. Cleanup functions should be non-nil on
+successful construction.
+
+### Shutdown with context and errors
+
+```go
+func InitApp(ctx context.Context) (*App, whyor.Cleanup, error) {
+	panic(whyor.Build(Providers, NewApp))
+}
+```
+
+After successful initialization, call the returned cleanup with your shutdown
+context, for example inside a function returning an error:
+
+```go
+app, cleanup, err := InitApp(ctx)
+if err != nil {
+	return err
+}
+_ = app // Run the application before initiating shutdown.
+stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+return cleanup(stopCtx)
+```
+
+- Providers may return `whyor.Cleanup`, another named function type with the same
+  underlying signature, or plain `func(context.Context) error`.
+- The injector must expose a context-aware cleanup if any reachable provider
+  requires one. Legacy `func()` providers can be combined with it unchanged.
+- Every acquired cleanup is called in reverse order, even after a cleanup error.
+  Errors are combined with `errors.Join`, preserving `errors.Is` / `errors.As`.
+- On successful initialization, your shutdown context is forwarded unchanged.
+- On failed initialization, cleanup errors are joined with the initialization
+  error. Rollback uses `context.WithoutCancel` on an injector context parameter,
+  preserving values but removing cancellation and deadlines. If there is no such
+  parameter, it uses `context.Background()`.
+- **Rollback has no generated deadline.** Cleanup implementations must bound
+  blocking operations themselves. Shutdown deadlines are cooperative: the
+  generator does not spawn goroutines or forcibly stop cleanup calls.
+- Cleanups are not made idempotent or concurrency-safe; the caller should invoke
+  the combined cleanup once.
+
+See [examples/lifecycle](examples/lifecycle) for mixed legacy/modern cleanup,
+`Close()` error aggregation and rollback tests.
 
 ## CLI
 
@@ -380,6 +426,7 @@ and behavior differences.
 | [basic](examples/basic) | Sets, interface binding, cleanup and `go generate`. |
 | [features](examples/features) | `Many`, `AutoBind` and `Closer`. |
 | [generics](examples/generics) | Explicit generic providers, imported constructors, multiple type arguments, sharing and cleanup. |
+| [lifecycle](examples/lifecycle) | Context-aware cleanup, error aggregation, legacy adaptation and failed initialization. |
 | [structs](examples/structs) | Selected struct fields and `FieldsOf`. |
 | [alias](examples/alias) | Matching an alias and its target type. |
 | [typeidentity](examples/typeidentity) | Nested aliases, equivalent interfaces, instantiated generic types and shared dependencies. |
