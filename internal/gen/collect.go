@@ -10,6 +10,7 @@ import (
 	"go/types"
 	"reflect"
 	"slices"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -20,6 +21,7 @@ type binding struct {
 	position token.Position
 	out      types.Type
 	fn       *types.Func
+	args     []types.Type
 	ins      []types.Type
 	res      results
 	target   types.Type
@@ -34,7 +36,14 @@ type binding struct {
 func (b *binding) describe() string {
 	switch {
 	case b.fn != nil:
-		return b.fn.Name()
+		if len(b.args) == 0 {
+			return b.fn.Name()
+		}
+		args := make([]string, len(b.args))
+		for i, t := range b.args {
+			args[i] = types.TypeString(t, nil)
+		}
+		return fmt.Sprintf("%s[%s]", b.fn.Name(), strings.Join(args, ", "))
 	case b.target != nil:
 		return "Bind"
 	case b.many:
@@ -97,7 +106,8 @@ func (c *collector) add(b *binding) error {
 		return nil
 	}
 	k := c.f.types.key(b.out)
-	if old, ok := c.bindings[k]; ok && (old.fn == nil || old.fn != b.fn) {
+	if old, ok := c.bindings[k]; ok && (old.fn == nil || b.fn == nil ||
+		c.f.types.provider(old.fn, old.args) != c.f.types.provider(b.fn, b.args)) {
 		return fmt.Errorf("multiple providers for %s (%s, %s)\n\tfirst: %s\n\tsecond: %s",
 			c.f.typ(b.out), old.describe(), b.describe(), old.position, b.position)
 	}
@@ -177,15 +187,19 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 			}
 			return c.add(&binding{position: at, out: targs[0], expr: s})
 		}
-	case *ast.Ident, *ast.SelectorExpr:
-		id, ok := v.(*ast.Ident)
-		if !ok {
-			id = v.(*ast.SelectorExpr).Sel
+	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
+		id := functionIdent(v)
+		if id == nil {
+			break
 		}
 		switch o := p.TypesInfo.Uses[id].(type) {
 		case *types.Func:
-			return c.addFunc(o, at)
+			return c.addFunc(o, p.TypesInfo, id, at)
 		case *types.Var:
+			switch v.(type) {
+			case *ast.IndexExpr, *ast.IndexListExpr:
+				return fmt.Errorf("%s: indexed values are not provider declarations", at)
+			}
 			d, ok := c.f.decls[o.Pos()]
 			if !ok || c.visiting[o.Pos()] {
 				return fmt.Errorf("%s: cannot expand set %s", at, o.Name())
@@ -198,10 +212,19 @@ func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 	return fmt.Errorf("%s: unsupported provider expression", at)
 }
 
-func (c *collector) addFunc(fn *types.Func, at token.Position) error {
+func (c *collector) addFunc(fn *types.Func, info *types.Info, id *ast.Ident, at token.Position) error {
 	sig := fn.Type().(*types.Signature)
-	if sig.Recv() != nil || sig.TypeParams().Len() > 0 || sig.Variadic() {
-		return fmt.Errorf("%s: provider %s must be a plain, non-generic, non-variadic function", at, fn.Name())
+	var args []types.Type
+	if sig.TypeParams().Len() > 0 {
+		instance, ok := info.Instances[id]
+		if !ok || instance.TypeArgs.Len() != sig.TypeParams().Len() {
+			return fmt.Errorf("%s: provider %s requires explicit type arguments", at, fn.Name())
+		}
+		args = slices.Collect(instance.TypeArgs.Types())
+		sig = instance.Type.(*types.Signature)
+	}
+	if sig.Recv() != nil || sig.Variadic() {
+		return fmt.Errorf("%s: provider %s must be a plain, non-variadic function", at, fn.Name())
 	}
 	if fn.Pkg() != c.f.pkg.Types && !fn.Exported() {
 		return fmt.Errorf("%s: provider %s is not exported", at, fn.FullName())
@@ -210,7 +233,7 @@ func (c *collector) addFunc(fn *types.Func, at token.Position) error {
 	if err != nil {
 		return fmt.Errorf("%s: provider %s: %w", at, fn.Name(), err)
 	}
-	b := &binding{position: c.f.pkg.Fset.Position(fn.Pos()), out: res.out, fn: fn, res: res}
+	b := &binding{position: c.f.pkg.Fset.Position(fn.Pos()), out: res.out, fn: fn, args: args, res: res}
 	for p := range sig.Params().Variables() {
 		b.ins = append(b.ins, p.Type())
 	}

@@ -21,7 +21,7 @@ type resolver struct {
 	cleanups []string // statements releasing what was acquired, in acquisition order
 	autos    []types.Type
 	closers  map[typeID]bool
-	fns      map[*types.Func]string // provider -> variable, so each runs once
+	fns      map[providerKey]string // provider instantiation -> variable
 	n        int
 }
 
@@ -168,7 +168,8 @@ func (r *resolver) emit(b *binding) (string, error) {
 		return v, nil
 	}
 
-	if v, ok := r.fns[b.fn]; ok {
+	key := r.f.types.provider(b.fn, b.args)
+	if v, ok := r.fns[key]; ok {
 		return v, nil
 	}
 	args := make([]string, len(b.ins))
@@ -202,10 +203,7 @@ func (r *resolver) emit(b *binding) (string, error) {
 	if b.res.err {
 		lhs = append(lhs, "err")
 	}
-	callee := b.fn.Name()
-	if b.fn.Pkg() != r.f.pkg.Types {
-		callee = r.f.qual(b.fn.Pkg()) + "." + callee
-	}
+	callee := r.f.callName(b)
 	fmt.Fprintf(&r.lines, "\t%s := %s(%s)\n", strings.Join(lhs, ", "), callee, strings.Join(args, ", "))
 	if b.res.err {
 		fmt.Fprintf(&r.lines, "\tif err != nil {\n%s\t\treturn %s\n\t}\n", r.cleanupCalls("\t\t"), r.failReturn())
@@ -217,7 +215,7 @@ func (r *resolver) emit(b *binding) (string, error) {
 		stmt, _ := closeStmt(b.out, v)
 		r.cleanups = append(r.cleanups, stmt)
 	}
-	r.fns[b.fn] = v
+	r.fns[key] = v
 	return v, nil
 }
 

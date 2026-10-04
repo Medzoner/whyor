@@ -67,7 +67,9 @@ These were long-standing open requests on Wire.
 - `Many` elements are not provided as their own type; add the provider outside
   the `Many` too if something else needs it.
 - `Bind`, `AutoBind`, `Closer` and nested `Many` are rejected inside `Many`.
-- Providers must be plain functions: no methods, generics or variadics.
+- Providers must be plain, non-variadic functions; methods are unsupported.
+  Generic constructors require explicit instantiation, such as `NewRepository[User]`.
+  Injectors themselves must remain non-generic.
 - Unexported providers from another package are rejected.
 - Errors carry a position and often a hint, for example
   `hint: *PG implements Store: add whyor.Bind[Store, *PG]()`.

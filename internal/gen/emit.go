@@ -117,7 +117,7 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	}
 
 	r := &resolver{f: f, res: res, bindings: c.bindings, autos: c.autos, closers: c.closers,
-		done: map[typeID]string{}, fns: map[*types.Func]string{}}
+		done: map[typeID]string{}, fns: map[providerKey]string{}}
 	var params []string
 	for i := range sig.Params().Len() {
 		p := sig.Params().At(i)
@@ -173,7 +173,11 @@ func (f *file) record(c *collector, r *resolver) {
 	var declare func(b *binding)
 	declare = func(b *binding) {
 		if b.fn != nil {
-			f.opts.use.declared[b.fn] = f.pkg.Fset.Position(b.fn.Pos())
+			key := f.opts.use.types.provider(b.fn, b.args)
+			f.opts.use.declared[key] = providerDeclaration{name: b.describe(), position: b.position}
+			if _, used := r.fns[f.types.provider(b.fn, b.args)]; used {
+				f.opts.use.used[key] = true
+			}
 		}
 		for _, e := range b.elems {
 			declare(e)
@@ -182,7 +186,19 @@ func (f *file) record(c *collector, r *resolver) {
 	for _, b := range c.bindings {
 		declare(b)
 	}
-	for fn := range r.fns {
-		f.opts.use.used[fn] = true
+}
+
+func (f *file) callName(b *binding) string {
+	name := b.fn.Name()
+	if b.fn.Pkg() != f.pkg.Types {
+		name = fmt.Sprintf("%s.%s", f.qual(b.fn.Pkg()), name)
 	}
+	if len(b.args) != 0 {
+		args := make([]string, len(b.args))
+		for i, t := range b.args {
+			args[i] = f.typ(t)
+		}
+		name = fmt.Sprintf("%s[%s]", name, strings.Join(args, ", "))
+	}
+	return name
 }

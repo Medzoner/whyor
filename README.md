@@ -191,6 +191,27 @@ The concrete type still needs a provider. Automatic binding succeeds only
 when exactly one registered `AutoBind` type implements the requested interface.
 Use explicit `Bind` declarations when you want to control the choice.
 
+### Instantiate generic providers
+
+Generic constructors are supported when every type argument is explicit:
+
+```go
+var Repositories = whyor.Set(
+	NewRepository[User],
+	NewRepository[Order],
+	NewPair[User, Order],
+)
+```
+
+The generator emits calls such as `NewRepository[User](...)`. Go checks the
+constraints; whyor resolves the instantiated constructor's dependencies.
+No type argument inference or automatic search for generic instantiations is performed.
+
+Each function instantiation is called once per injector. Different type
+arguments stay distinct, even when they produce the same result type. Use
+`Many` to collect such results; otherwise the usual duplicate-provider rule
+applies. Alias-equivalent arguments identify the same instantiation.
+
 ### Construct structs and expose configuration fields
 
 ```go
@@ -358,6 +379,7 @@ and behavior differences.
 |---|---|
 | [basic](examples/basic) | Sets, interface binding, cleanup and `go generate`. |
 | [features](examples/features) | `Many`, `AutoBind` and `Closer`. |
+| [generics](examples/generics) | Explicit generic providers, imported constructors, multiple type arguments, sharing and cleanup. |
 | [structs](examples/structs) | Selected struct fields and `FieldsOf`. |
 | [alias](examples/alias) | Matching an alias and its target type. |
 | [typeidentity](examples/typeidentity) | Nested aliases, equivalent interfaces, instantiated generic types and shared dependencies. |
@@ -365,7 +387,8 @@ and behavior differences.
 
 ## Current limitations
 
-- Providers and injectors must be plain, non-generic, non-variadic functions.
+- Providers must be plain, non-variadic functions. Generic providers require all type arguments to be supplied explicitly; methods are unsupported.
+- Injectors must be non-generic and non-variadic functions.
 - Injectors must contain the declaration `panic(whyor.Build(...))` as their only statement.
 - Generated code calls providers; it does not copy helpers from tagged files.
 - `Many` does not accept nested `Many`, `Bind`, `AutoBind` or `Closer` declarations.

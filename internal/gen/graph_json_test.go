@@ -48,7 +48,7 @@ func TestGraphJSONMultiplePackages(t *testing.T) {
 		t.Fatalf("missing injectors: %d", len(document.Graphs))
 	}
 	for _, g := range document.Graphs {
-		if g.Injector == "InitApp" {
+		if g.Injector == "InitApp" && strings.HasSuffix(g.Package, "/examples/basic") {
 			if len(g.Nodes) != 5 || len(g.Edges) != 4 {
 				t.Fatalf("unexpected basic graph: %+v", g)
 			}

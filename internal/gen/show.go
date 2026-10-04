@@ -66,9 +66,9 @@ func (r *resolver) label(c child, b *binding, given map[typeID]string) string {
 // nodeKey separates providers returning the same type inside Many while
 // merging calls to the same function across Many and standalone dependencies.
 type nodeKey struct {
-	typeID typeID
-	fn     *types.Func
-	value  *binding
+	typeID   typeID
+	provider providerKey
+	value    *binding
 }
 
 // graph is a dependency graph for mermaid, dot and JSON.
@@ -89,7 +89,9 @@ func (g *graph) walk(r *resolver, c child, given map[typeID]string) int {
 	}
 	key := nodeKey{typeID: k}
 	if b != nil {
-		key.fn = b.fn
+		if b.fn != nil {
+			key.provider = r.f.types.provider(b.fn, b.args)
+		}
 	}
 	if c.b != nil && b.fn == nil {
 		key.value = b
@@ -162,8 +164,8 @@ func children(b *binding) []child {
 // provider names what builds a binding, qualifying functions of other packages.
 func (r *resolver) provider(b *binding) string {
 	switch {
-	case b.fn != nil && b.fn.Pkg() != r.f.pkg.Types:
-		return r.f.qual(b.fn.Pkg()) + "." + b.fn.Name()
+	case b.fn != nil:
+		return r.f.callName(b)
 	case b.field != "":
 		return "field " + b.field
 	case b.target != nil:

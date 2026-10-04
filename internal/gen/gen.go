@@ -113,16 +113,16 @@ func Unused(dir string, patterns []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	use := &usage{declared: map[*types.Func]token.Position{}, used: map[*types.Func]bool{}}
+	use := &usage{declared: map[providerKey]providerDeclaration{}, used: map[providerKey]bool{}}
 	for _, pkg := range pkgs {
 		if _, err := generate(pkg, decls, options{use: use}); err != nil {
 			return nil, err
 		}
 	}
 	var out []string
-	for fn, pos := range use.declared {
-		if !use.used[fn] {
-			out = append(out, fmt.Sprintf("%s: provider %s is never used", pos, fn.Name()))
+	for key, declaration := range use.declared {
+		if !use.used[key] {
+			out = append(out, fmt.Sprintf("%s: provider %s is never used", declaration.position, declaration.name))
 		}
 	}
 	sort.Strings(out)
@@ -131,8 +131,14 @@ func Unused(dir string, patterns []string) ([]string, error) {
 
 // usage records which providers are declared by injectors and which are called.
 type usage struct {
-	declared map[*types.Func]token.Position
-	used     map[*types.Func]bool
+	declared map[providerKey]providerDeclaration
+	used     map[providerKey]bool
+	types    typeIndex
+}
+
+type providerDeclaration struct {
+	name     string
+	position token.Position
 }
 
 // options tune a generate run.
@@ -225,8 +231,8 @@ func buildCall(info *types.Info, fd *ast.FuncDecl) *ast.CallExpr {
 	return c
 }
 
-// api reports the whyor function (and its type arguments) that e refers to.
-func api(info *types.Info, e ast.Expr) (string, []types.Type) {
+// functionIdent unwraps parentheses and explicit instantiation syntax.
+func functionIdent(e ast.Expr) *ast.Ident {
 	for {
 		switch x := e.(type) {
 		case *ast.ParenExpr:
@@ -245,6 +251,15 @@ func api(info *types.Info, e ast.Expr) (string, []types.Type) {
 	if sel, ok := e.(*ast.SelectorExpr); ok {
 		id = sel.Sel
 	}
+	if id == nil {
+		return nil
+	}
+	return id
+}
+
+// api reports the whyor function (and its type arguments) that e refers to.
+func api(info *types.Info, e ast.Expr) (string, []types.Type) {
+	id := functionIdent(e)
 	if id == nil {
 		return "", nil
 	}

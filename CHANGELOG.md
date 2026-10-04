@@ -6,6 +6,41 @@ whyor is pre-1.0; review release notes before upgrading.
 
 ## [Unreleased]
 
+## [v0.9.0]
+
+### Added
+
+- Explicit generic provider instantiations, including imported constructors
+  and multiple type arguments: `NewRepository[User]`, `pkg.NewPair[A, B]`.
+- Generation resolves the instantiated signature and emits explicit generic
+  calls; Go validates the type constraints.
+- Function instantiations have separate identities even when the type arguments
+  do not appear in their signatures. Alias-equivalent instantiations share one
+  call per injector.
+- Generic providers work inside `Set` and `Many`, with error propagation and
+  reverse-order cleanup.
+- Graphs and `unused` distinguish instantiations rather than only function names.
+- Executable generic-provider examples and regression tests for conflicts,
+  constraints, shared calls and failure-path cleanup.
+
+### Upgrade notes
+
+- Requires Go **1.27.1+**; existing declaration signatures are unchanged.
+- All generic type arguments must be explicit. There is no automatic inference
+  or discovery of generic instantiations.
+- Different instantiations supplying the same result type conflict outside
+  `Many`, just like different non-generic providers.
+- Injectors remain non-generic; method and variadic providers remain unsupported.
+- JSON graph schema remains at version `1`; generic provider names include
+  their type arguments.
+
+```sh
+go install github.com/Medzoner/whyor/cmd/whyor@v0.9.0
+go get github.com/Medzoner/whyor@v0.9.0
+whyor gen ./...
+go test ./...
+```
+
 ## [v0.8.0]
 
 ### Added
@@ -56,5 +91,6 @@ whyor gen ./...
 go test ./...
 ```
 
-[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.9.0...HEAD
+[v0.9.0]: https://github.com/Medzoner/whyor/compare/v0.8.0...v0.9.0
 [v0.8.0]: https://github.com/Medzoner/whyor/compare/v0.7.1...v0.8.0
