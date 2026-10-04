@@ -259,12 +259,23 @@ func (c *collector) addFunc(fn *types.Func, info *types.Info, id *ast.Ident, at 
 // valueExpr prints a Value argument, reserving the imports it relies on.
 func (f *file) valueExpr(x ast.Expr, p *packages.Package) (string, error) {
 	var err error
+	type rename struct {
+		id   *ast.Ident
+		name string
+	}
+	var renamed []rename
+	defer func() {
+		for _, r := range renamed {
+			r.id.Name = r.name
+		}
+	}()
 	ast.Inspect(x, func(n ast.Node) bool {
 		switch v := n.(type) {
 		case *ast.SelectorExpr:
 			if id, ok := v.X.(*ast.Ident); ok {
 				if pn, ok := p.TypesInfo.Uses[id].(*types.PkgName); ok {
-					err = f.reserve(id.Name, pn.Imported().Path())
+					renamed = append(renamed, rename{id, id.Name})
+					id.Name = f.qual(pn.Imported())
 					return false
 				}
 			}
@@ -303,7 +314,12 @@ func (c *collector) addStruct(t types.Type, call *ast.CallExpr, p *packages.Pack
 		}
 	}
 	b := &binding{position: at, out: t, fields: []string{}}
+	seen := map[string]bool{}
 	for _, name := range names {
+		if seen[name] {
+			return fmt.Errorf("%s: Struct: field %s is listed more than once", at, name)
+		}
+		seen[name] = true
 		i := slices.IndexFunc(structFields(st), func(f *types.Var) bool { return f.Name() == name })
 		if i < 0 || !st.Field(i).Exported() {
 			return fmt.Errorf("%s: Struct: %s has no exported field %s", at, c.f.typ(t), name)

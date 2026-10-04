@@ -24,6 +24,8 @@ type resolver struct {
 	fns         map[providerKey]string // provider instantiation -> variable
 	n           int
 	initContext string
+	names       map[string]bool
+	errName     string
 }
 
 type cleanupCall struct {
@@ -171,7 +173,7 @@ func (r *resolver) emit(b *binding) (string, error) {
 		return v, nil
 	case b.fn == nil:
 		v := r.next()
-		fmt.Fprintf(&r.lines, "\t%s := %s\n", v, b.expr)
+		fmt.Fprintf(&r.lines, "\tvar %s %s = %s\n", v, r.f.typ(b.out), b.expr)
 		return v, nil
 	}
 
@@ -207,19 +209,21 @@ func (r *resolver) emit(b *binding) (string, error) {
 
 	v := r.next()
 	lhs := []string{v}
+	cleanupName := ""
 	if b.res.cleanup {
-		lhs = append(lhs, "cleanup"+v[1:])
+		cleanupName = r.localName(fmt.Sprintf("cleanup%d", r.n))
+		lhs = append(lhs, cleanupName)
 	}
 	if b.res.err {
-		lhs = append(lhs, "err")
+		lhs = append(lhs, r.errName)
 	}
 	callee := r.f.callName(b)
 	fmt.Fprintf(&r.lines, "\t%s := %s(%s)\n", strings.Join(lhs, ", "), callee, strings.Join(args, ", "))
 	if b.res.err {
-		fmt.Fprintf(&r.lines, "\tif err != nil {\n%s\t\treturn %s\n\t}\n", r.cleanupCalls("\t\t", r.failureContext()), r.failReturn())
+		fmt.Fprintf(&r.lines, "\tif %s != nil {\n%s\t\treturn %s\n\t}\n", r.errName, r.cleanupCalls("\t\t", r.failureContext()), r.failReturn())
 	}
 	if b.res.cleanup {
-		r.cleanups = append(r.cleanups, cleanupCall{name: "cleanup" + v[1:], context: b.res.lifecycle, err: b.res.lifecycle})
+		r.cleanups = append(r.cleanups, cleanupCall{name: cleanupName, context: b.res.lifecycle, err: b.res.lifecycle})
 	}
 	if closer {
 		stmt, _ := closeStmt(b.out, v)
@@ -230,8 +234,14 @@ func (r *resolver) emit(b *binding) (string, error) {
 }
 
 func (r *resolver) next() string {
-	r.n++
-	return fmt.Sprintf("v%d", r.n)
+	for {
+		r.n++
+		name := fmt.Sprintf("v%d", r.n)
+		if !r.nameTaken(name) {
+			r.names[name] = true
+			return name
+		}
+	}
 }
 
 // cleanupCalls calls the cleanups acquired so far, in reverse order.
@@ -245,7 +255,7 @@ func (r *resolver) cleanupCalls(indent, ctx string) string {
 		call := fmt.Sprintf("%s(%s)", c.name, args)
 		if c.err {
 			if r.res.lifecycle {
-				call = fmt.Sprintf("err = %s.Join(err, %s)", r.standardPackage("errors"), call)
+				call = fmt.Sprintf("%s = %s.Join(%s, %s)", r.errName, r.standardPackage("errors"), r.errName, call)
 			} else {
 				call = "_ = " + call
 			}
@@ -260,13 +270,14 @@ func (r *resolver) failReturn() string {
 	if r.res.cleanup {
 		ret += ", nil"
 	}
-	return ret + ", err"
+	return fmt.Sprintf("%s, %s", ret, r.errName)
 }
 
 func (r *resolver) cleanupFunc() string {
 	if r.res.lifecycle {
-		return fmt.Sprintf("func(_cleanupCtx %s.Context) error {\n\t\tvar err error\n%s\t\treturn err\n\t}",
-			r.standardPackage("context"), r.cleanupCalls("\t\t", "_cleanupCtx"))
+		ctx := r.localName("_cleanupCtx")
+		return fmt.Sprintf("func(%s %s.Context) error {\n\t\tvar %s error\n%s\t\treturn %s\n\t}",
+			ctx, r.standardPackage("context"), r.errName, r.cleanupCalls("\t\t", ctx), r.errName)
 	}
 	if len(r.cleanups) == 0 {
 		return "func() {}"

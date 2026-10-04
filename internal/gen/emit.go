@@ -15,18 +15,35 @@ import (
 
 // file accumulates the generated file of one package.
 type file struct {
-	pkg     *packages.Package
-	decls   map[token.Pos]varDecl
-	aliases map[string]string // import path -> alias
-	used    map[string]string // alias -> import path
-	body    bytes.Buffer
-	opts    options
-	tree    *strings.Builder // set by Show: print dependency trees instead of code
-	types   typeIndex
+	pkg      *packages.Package
+	decls    map[token.Pos]varDecl
+	aliases  map[string]string // import path -> alias
+	used     map[string]string // alias -> import path
+	body     bytes.Buffer
+	opts     options
+	tree     *strings.Builder // set by Show: print dependency trees instead of code
+	types    typeIndex
+	reserved map[string]bool
 }
 
 func newFile(pkg *packages.Package, decls map[token.Pos]varDecl) *file {
-	return &file{pkg: pkg, decls: decls, aliases: map[string]string{}, used: map[string]string{}}
+	f := &file{pkg: pkg, decls: decls, aliases: map[string]string{}, used: map[string]string{}, reserved: map[string]bool{}}
+	for _, name := range pkg.Types.Scope().Names() {
+		f.reserved[name] = true
+	}
+	for _, source := range pkg.Syntax {
+		for _, d := range source.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || buildCall(pkg.TypesInfo, fd) == nil {
+				continue
+			}
+			sig := pkg.TypesInfo.Defs[fd.Name].Type().(*types.Signature)
+			for p := range sig.Params().Variables() {
+				f.reserved[p.Name()] = true
+			}
+		}
+	}
+	return f
 }
 
 func (f *file) bytes() []byte {
@@ -52,23 +69,15 @@ func (f *file) qual(p *types.Package) string {
 		return a
 	}
 	a := p.Name()
-	for i := 2; f.used[a] != "" || token.IsKeyword(a) || types.Universe.Lookup(a) != nil; i++ {
-		a = fmt.Sprintf("%s%d", p.Name(), i)
+	if generatedName(a) {
+		a += "_pkg"
+	}
+	base := a
+	for i := 2; f.used[a] != "" || f.reserved[a] || token.IsKeyword(a) || types.Universe.Lookup(a) != nil; i++ {
+		a = fmt.Sprintf("%s%d", base, i)
 	}
 	f.aliases[p.Path()], f.used[a] = a, p.Path()
 	return a
-}
-
-// reserve forces an import alias, as spelled in a Value expression.
-func (f *file) reserve(alias, path string) error {
-	if p := f.used[alias]; p != "" && p != path {
-		return fmt.Errorf("import alias %q used for both %s and %s", alias, p, path)
-	}
-	if a := f.aliases[path]; a != "" && a != alias {
-		return fmt.Errorf("package %s needed as both %q and %q", path, a, alias)
-	}
-	f.aliases[path], f.used[alias] = alias, path
-	return nil
 }
 
 func (f *file) typ(t types.Type) string { return types.TypeString(t, f.qual) }
@@ -117,14 +126,18 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	}
 
 	r := &resolver{f: f, res: res, bindings: c.bindings, autos: c.autos, closers: c.closers,
-		done: map[typeID]string{}, fns: map[providerKey]string{}}
+		done: map[typeID]string{}, fns: map[providerKey]string{}, names: map[string]bool{}}
 	var params []string
 	for i := range sig.Params().Len() {
 		p := sig.Params().At(i)
 		name := p.Name()
-		if name == "" || name == "_" {
-			name = fmt.Sprintf("arg%d", i)
+		if name != "_" && types.Universe.Lookup(name) != nil {
+			return fmt.Errorf("parameter %q shadows a predeclared Go identifier; rename it", name)
 		}
+		if name == "" || name == "_" {
+			name = r.localName(fmt.Sprintf("arg%d", i))
+		}
+		r.names[name] = true
 		if _, dup := r.done[f.types.key(p.Type())]; dup {
 			return fmt.Errorf("multiple parameters of type %s", f.typ(p.Type()))
 		}
@@ -134,6 +147,7 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 		}
 		params = append(params, name+" "+f.typ(p.Type()))
 	}
+	r.errName = r.localName("err")
 	given := maps.Clone(r.done)
 	out, err := r.resolve(res.out)
 	if err != nil {

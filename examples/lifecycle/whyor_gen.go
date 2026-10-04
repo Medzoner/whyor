@@ -54,7 +54,7 @@ func InitLegacy(events *Events) (*Legacy, whyor.Cleanup) {
 }
 
 func InitEmpty() (*App, whyor.Cleanup) {
-	v1 := &App{}
+	var v1 *App = &App{}
 	return v1, func(_cleanupCtx context.Context) error {
 		var err error
 		return err

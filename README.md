@@ -434,9 +434,13 @@ and behavior differences.
 
 ## Current limitations
 
+See [generation contracts and v1.0 readiness](docs/guarantees.md) for verified
+guarantees, output-file ownership and remaining stabilization work.
+
 - Providers must be plain, non-variadic functions. Generic providers require all type arguments to be supplied explicitly; methods are unsupported.
 - Injectors must be non-generic and non-variadic functions.
 - Injectors must contain the declaration `panic(whyor.Build(...))` as their only statement.
+- Injector parameters must not shadow predeclared Go identifiers such as `error`, `nil` or `new`.
 - Generated code calls providers; it does not copy helpers from tagged files.
 - `Many` does not accept nested `Many`, `Bind`, `AutoBind` or `Closer` declarations.
 - Dependency resolution is type-based: multiple providers of the same type conflict outside `Many`.

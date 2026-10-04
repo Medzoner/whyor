@@ -11,8 +11,8 @@ import (
 )
 
 func InitOut() (Out, func(), error) {
-	v1 := 5 * time.Second
-	v2 := "edge"
+	var v1 time.Duration = 5 * time.Second
+	var v2 string = "edge"
 	v3 := log.New()
 	v4 := log2.New()
 	v5, cleanup5 := NewR1()

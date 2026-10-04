@@ -6,6 +6,40 @@ whyor is pre-1.0; review release notes before upgrading.
 
 ## [Unreleased]
 
+## [v0.11.0]
+
+### Fixed
+
+- `Value[T]` preserves its declared type, including typed constants, nil,
+  interface values and named types, rather than relying on `:=` inference.
+- Generated locals and import aliases avoid collisions with injector parameters
+  and package declarations. Value expression imports follow the generated aliases.
+- Unsupported Build declarations and injector files included in default builds
+  are rejected instead of silently producing incorrect wiring.
+- Duplicate Struct fields and injector parameters shadowing predeclared Go
+  identifiers are rejected with explicit diagnostics.
+
+### Output safety
+
+- Validate all matching graphs before writing any output files.
+- Refuse to overwrite manually owned files or follow output symbolic links.
+- Replace each output through a same-directory temporary file and rename.
+  Filesystem I/O failures are not a multi-file transaction.
+
+### Documentation and tests
+
+- Compile-and-run regression tests for typed values and generated-name collisions.
+- Output preservation, symlink rejection and batch-validation tests.
+- Documented generation contracts and explicit remaining work before a v1.0.
+
+### Upgrade notes
+
+- Requires Go **1.27.1+**; declaration signatures and graph schema are unchanged.
+- Regenerate outputs: generated variable declarations and aliases can change.
+- Rename injector parameters which shadow predeclared identifiers. Ensure each
+  injector has a valid build tag and each existing output has the whyor header.
+- This remains a pre-1.0 stabilization release, not a claim of API freeze.
+
 ## [v0.10.0]
 
 ### Added
@@ -124,7 +158,8 @@ whyor gen ./...
 go test ./...
 ```
 
-[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.11.0...HEAD
+[v0.11.0]: https://github.com/Medzoner/whyor/compare/v0.10.0...v0.11.0
 [v0.10.0]: https://github.com/Medzoner/whyor/compare/v0.9.0...v0.10.0
 [v0.9.0]: https://github.com/Medzoner/whyor/compare/v0.8.0...v0.9.0
 [v0.8.0]: https://github.com/Medzoner/whyor/compare/v0.7.1...v0.8.0

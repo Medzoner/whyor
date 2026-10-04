@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/format"
 	"go/token"
 	"go/types"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -32,6 +32,7 @@ func Run(dir string, patterns []string, write bool) ([]string, error) {
 	}
 
 	var changed []string
+	var outputs []outputFile
 	for _, pkg := range pkgs {
 		src, err := generate(pkg, decls, options{})
 		if err != nil || src == nil {
@@ -41,12 +42,19 @@ func Run(dir string, patterns []string, write bool) ([]string, error) {
 			continue
 		}
 		out := filepath.Join(filepath.Dir(pkg.Fset.Position(pkg.Syntax[0].Pos()).Filename), genFile)
-		if old, _ := os.ReadFile(out); bytes.Equal(old, src) {
+		old, err := readOutput(out)
+		if err != nil {
+			return nil, err
+		}
+		if bytes.Equal(old, src) {
 			continue
 		}
 		changed = append(changed, out)
-		if write {
-			if err := os.WriteFile(out, src, 0o644); err != nil {
+		outputs = append(outputs, outputFile{path: out, source: src})
+	}
+	if write {
+		for _, output := range outputs {
+			if err := output.write(); err != nil {
 				return nil, err
 			}
 		}
@@ -182,14 +190,36 @@ func generate(pkg *packages.Package, decls map[token.Pos]varDecl, opts options) 
 		g.tree = &strings.Builder{}
 	}
 	for _, f := range pkg.Syntax {
+		accepted := map[*ast.CallExpr]bool{}
 		for _, d := range f.Decls {
 			if fd, ok := d.(*ast.FuncDecl); ok {
 				if call := buildCall(pkg.TypesInfo, fd); call != nil {
+					filename := pkg.Fset.Position(f.Pos()).Filename
+					matches, err := build.Default.MatchFile(filepath.Dir(filename), filepath.Base(filename))
+					if err != nil {
+						return nil, err
+					}
+					if matches {
+						return nil, fmt.Errorf("%s: injector file must be excluded from the default build with //go:build whyor", filename)
+					}
+					accepted[call] = true
 					if err := g.injector(fd, call); err != nil {
 						return nil, err
 					}
 				}
 			}
+		}
+		var declarationErr error
+		ast.Inspect(f, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok && !accepted[call] {
+				if name, _ := api(pkg.TypesInfo, call.Fun); name == "Build" {
+					declarationErr = fmt.Errorf("%s: Build must be the sole panic(whyor.Build(...)) statement of an injector", pkg.Fset.Position(call.Pos()))
+				}
+			}
+			return declarationErr == nil
+		})
+		if declarationErr != nil {
+			return nil, declarationErr
 		}
 	}
 	if g.tree != nil {
@@ -218,7 +248,11 @@ func buildCall(info *types.Info, fd *ast.FuncDecl) *ast.CallExpr {
 	if p == nil || len(p.Args) != 1 {
 		return nil
 	}
-	if id, _ := p.Fun.(*ast.Ident); id == nil || id.Name != "panic" {
+	id, _ := p.Fun.(*ast.Ident)
+	if id == nil {
+		return nil
+	}
+	if builtin, _ := info.Uses[id].(*types.Builtin); builtin == nil || builtin.Name() != "panic" {
 		return nil
 	}
 	c, _ := p.Args[0].(*ast.CallExpr)
