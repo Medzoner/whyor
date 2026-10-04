@@ -12,7 +12,26 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - run: make check
+      - name: Extract release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          changelog = Path("CHANGELOG.md").read_text()
+          heading = f"## [{tag}]\n"
+          if heading not in changelog:
+              raise SystemExit(f"Missing changelog entry for {tag}")
+          notes = changelog.split(heading, 1)[1].split("\n## ", 1)[0]
+          notes = notes.split("\n[Unreleased]:", 1)[0].strip()
+          if not notes:
+              raise SystemExit(f"Empty changelog entry for {tag}")
+          Path("/tmp/whyor-release-notes.md").write_text(notes + "\n")
+          PY
       - name: Build binaries
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
@@ -20,7 +39,13 @@ jobs:
             ext=""; [ "$os" = windows ] && ext=.exe
             GOOS=$os GOARCH=$arch go build -trimpath -o "dist/whyor_${os}_${arch}${ext}" ./cmd/whyor
           done
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum whyor_* > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag --title "$GITHUB_REF_NAME" \
+            --notes-file /tmp/whyor-release-notes.md

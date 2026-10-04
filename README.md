@@ -14,7 +14,7 @@ Compile-time dependency injection for Go, inspired by Google Wire.
 
 **No runtime DI container · No reflection · Inspectable generated code**
 
-[Quick start](#quick-start) · [API](#api-at-a-glance) · [CLI](#cli) · [From Wire](docs/migrating-from-wire.md)
+[Quick start](#quick-start) · [API](#api-at-a-glance) · [CLI](#cli) · [Changelog](CHANGELOG.md) · [From Wire](docs/migrating-from-wire.md)
 
 </div>
 
@@ -51,6 +51,16 @@ go get github.com/Medzoner/whyor@latest
 Current releases require **Go 1.27.1+**. Build the generator with a Go version
 at least as recent as your application's version. Add `$(go env GOPATH)/bin`
 to your `PATH` if `whyor` is not found, or use your configured `GOBIN`.
+
+Prebuilt binaries are available from [GitHub Releases](https://github.com/Medzoner/whyor/releases).
+Starting with v0.8.0, each release includes `SHA256SUMS` for verifying downloaded
+binaries. For reproducible installs, replace `@latest` with a specific tag.
+
+## Releases
+
+See [CHANGELOG.md](CHANGELOG.md) for changes and upgrade notes. Releases use
+version tags; a tag triggers validation, cross-platform builds and publication
+of binaries and checksums. Development commits on `main` are not releases.
 
 ## Quick start
 
