@@ -6,6 +6,13 @@ whyor is pre-1.0; review release notes before upgrading.
 
 ## [Unreleased]
 
+### Documentation
+
+- Runnable showcase application and a five-screen terminal demo with a recording
+  storyboard and an SVG preview of verified output.
+- Short Wire migration diff and a factual author-maintained application case study.
+- Contribution guide and roadmap separating verified features from v1.0 readiness work.
+
 ## [v0.11.0]
 
 ### Fixed

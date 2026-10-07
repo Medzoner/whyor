@@ -20,6 +20,16 @@ Compile-time dependency injection for Go, inspired by Google Wire.
 
 ![How whyor turns constructors and an injector into plain Go](docs/assets/how-it-works.svg)
 
+## See it work
+
+- **[Run the 60-second demo](docs/demo/README.md)** — constructors, generation,
+  graph inspection and a running application, with no external service.
+- **[See a small Wire migration](docs/wire-migration-example.md)** — the declaration
+  diff, unchanged constructors and exact migration commands.
+- **[Read the author's application migration notes](docs/case-study-medzoner-go.md)**
+  — what was tested, what failed and what is not a production claim.
+- **[Explore the roadmap](ROADMAP.md)** — v1.0 readiness and bounded first contributions.
+
 ## Why whyor?
 
 Your constructors already describe their dependencies. whyor connects them and
@@ -423,6 +433,7 @@ and behavior differences.
 
 | Example | Demonstrates |
 |---|---|
+| [showcase](examples/showcase) | Runnable hello application, interface binding and demonstrative cleanup. |
 | [basic](examples/basic) | Sets, interface binding, cleanup and `go generate`. |
 | [features](examples/features) | `Many`, `AutoBind` and `Closer`. |
 | [generics](examples/generics) | Explicit generic providers, imported constructors, multiple type arguments, sharing and cleanup. |
@@ -462,6 +473,7 @@ For a change to generation behavior, add an example or regression test and
 regenerate the expected output.
 
 Found a bug or have a proposal? [Open an issue](https://github.com/Medzoner/whyor/issues).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for reproductions, tests and PR expectations.
 
 ## License
 

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="530" viewBox="0 0 1000 530" role="img" aria-labelledby="title desc">
+  <title id="title">whyor demo: inspect the graph, run the application</title>
+  <desc id="desc">An abbreviated rendering of verified demo output. InitApp builds App through Store, MemoryStore and Config from a name parameter. The app prints Hello, Go and invokes its demonstrative cleanup.</desc>
+  <rect width="1000" height="530" rx="20" fill="#101827"/>
+  <path d="M20 0H980Q1000 0 1000 20V48H0V20Q0 0 20 0" fill="#1e3046"/>
+  <circle cx="28" cy="24" r="6" fill="#fb7185"/><circle cx="49" cy="24" r="6" fill="#fbbf24"/><circle cx="70" cy="24" r="6" fill="#5eead4"/>
+  <text x="500" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" fill="#cbd5e1">whyor · a one-minute tour</text>
+  <g font-family="ui-monospace, 'DejaVu Sans Mono', monospace" font-size="20">
+    <text x="40" y="93" fill="#5eead4">$ whyor gen .</text>
+    <text x="40" y="127" fill="#cbd5e1">…/whyor_gen.go</text>
+    <text x="40" y="179" fill="#5eead4">$ whyor show .</text>
+    <g fill="#e2e8f0">
+      <text x="40" y="213">InitApp</text>
+      <text x="40" y="247">└── *App [NewApp]</text>
+      <text x="88" y="281">└── Store [Bind]</text>
+      <text x="136" y="315">└── *MemoryStore [NewStore]</text>
+      <text x="184" y="349">└── *Config [NewConfig]</text>
+      <text x="232" y="383">└── string [parameter name]</text>
+    </g>
+    <text x="40" y="435" fill="#5eead4">$ go run .</text>
+    <text x="40" y="469" fill="#f8fafc">Hello, Go</text>
+    <text x="40" y="503" fill="#a9bad0">cleanup: memory store</text>
+  </g>
+</svg>

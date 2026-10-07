@@ -1,8 +1,8 @@
 # Migrating from Google Wire
 
 whyor keeps Wire's model: injectors are declared in a file guarded by a build
-tag, and a tool writes plain Go. The API is new (generics, no `interface{}`
-arguments), so the migration is mechanical but not a rename.
+tag, and a tool writes plain Go. The API uses generic type markers instead of
+Wire's pointer markers, so the migration is not just a rename.
 
 ## Files and commands
 
