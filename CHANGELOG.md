@@ -12,6 +12,9 @@ whyor is pre-1.0; review release notes before upgrading.
   storyboard and an SVG preview of verified output.
 - Short Wire migration diff and a factual author-maintained application case study.
 - Contribution guide and roadmap separating verified features from v1.0 readiness work.
+- Expanded package documentation, bug/proposal issue forms and a PR template.
+- Editable social-preview artwork and a repository metadata setup guide. GitHub
+  About/topics/image settings require a separate administrative action.
 
 ## [v0.11.0]
 
