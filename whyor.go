@@ -1,15 +1,3 @@
-// Package whyor is a compile-time dependency injection toolkit.
-//
-// Injectors are declared in files guarded by the "whyor" build tag:
-//
-//	//go:build whyor
-//
-//	func InitApp(path string) (*App, func(), error) {
-//		panic(whyor.Build(NewConfig, NewDB, whyor.Bind[Store, *PG]()))
-//	}
-//
-// `whyor gen` then writes a whyor_gen.go file containing plain Go code.
-// Nothing in this package does any work at runtime.
 package whyor
 
 import "context"

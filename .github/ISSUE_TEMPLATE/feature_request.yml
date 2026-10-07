@@ -1,0 +1,28 @@
+name: Feature or API proposal
+description: Explain a concrete composition problem and a bounded proposal.
+title: "proposal: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        whyor generates explicit Go wiring; it is not a runtime application framework.
+        Please describe the use case before the API. Do not include secrets or private data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What composition problem do you need to solve?
+      description: A real constructor/injector example is useful. Mention the Wire form if this is a migration need.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the smallest useful change, including generated output or diagnostics where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and compatibility
+      description: Could ordinary Go wrapper constructors solve this? What existing behavior would change?

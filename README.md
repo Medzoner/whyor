@@ -14,7 +14,7 @@ Compile-time dependency injection for Go, inspired by Google Wire.
 
 **No runtime DI container · No reflection · Inspectable generated code**
 
-[Quick start](#quick-start) · [API](#api-at-a-glance) · [CLI](#cli) · [Changelog](CHANGELOG.md) · [From Wire](docs/migrating-from-wire.md)
+[Quick start](#quick-start) · [API docs](https://pkg.go.dev/github.com/Medzoner/whyor) · [CLI](#cli) · [Releases](https://github.com/Medzoner/whyor/releases) · [From Wire](docs/migrating-from-wire.md)
 
 </div>
 

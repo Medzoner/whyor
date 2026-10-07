@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">whyor: compile-time dependency injection for Go</title>
+  <desc id="desc">Declare the graph. Generate plain Go. An inspectable alternative to Wire, without a runtime DI container.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1120"/><stop offset="1" stop-color="#20334f"/></linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#94a3b8" stroke-opacity=".09"/></pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <rect x="72" y="68" width="166" height="34" rx="17" fill="#143c3d" stroke="#2a7770"/>
+  <g font-family="system-ui, sans-serif">
+    <text x="155" y="91" text-anchor="middle" fill="#99f6e4" font-size="14" font-weight="700" letter-spacing="1">OPEN SOURCE · GO</text>
+    <text x="66" y="243" fill="#f8fafc" font-size="118" font-weight="700" letter-spacing="-6">whyor</text>
+    <text x="72" y="310" fill="#e2e8f0" font-size="30" font-weight="600">Compile-time dependency injection for Go</text>
+    <text x="72" y="367" fill="#a9bad0" font-size="24">Declare the graph. Generate plain Go.</text>
+    <text x="72" y="408" fill="#a9bad0" font-size="24">Inspect it. Commit it. Ship it.</text>
+    <rect x="72" y="457" width="560" height="48" rx="8" fill="#142f35" stroke="#38796e"/>
+    <text x="352" y="488" text-anchor="middle" fill="#ccfbf1" font-size="18">No runtime DI container · Inspectable output</text>
+    <text x="72" y="579" fill="#cbd5e1" font-size="22">github.com/Medzoner/whyor</text>
+  </g>
+  <g transform="translate(790 165)">
+    <rect width="420" height="295" rx="16" fill="#0b1423" stroke="#38516b"/>
+    <path d="M16 0H404Q420 0 420 16V45H0V16Q0 0 16 0" fill="#23354b"/>
+    <circle cx="24" cy="23" r="5" fill="#fb7185"/><circle cx="42" cy="23" r="5" fill="#fbbf24"/><circle cx="60" cy="23" r="5" fill="#5eead4"/>
+    <g font-family="ui-monospace, 'DejaVu Sans Mono', monospace" font-size="18">
+      <text x="26" y="94" fill="#5eead4">$ whyor gen .</text>
+      <text x="26" y="135" fill="#94a3b8">// ordinary Go</text>
+      <text x="26" y="177" fill="#e2e8f0">cfg := NewConfig(name)</text>
+      <text x="26" y="211" fill="#e2e8f0">store := NewStore(cfg)</text>
+      <text x="26" y="245" fill="#e2e8f0">return NewApp(store)</text>
+    </g>
+  </g>
+</svg>

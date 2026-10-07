@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: API documentation
+    url: https://pkg.go.dev/github.com/Medzoner/whyor
+    about: Read declaration signatures and package documentation.
+  - name: Migrating from Wire
+    url: https://github.com/Medzoner/whyor/blob/main/docs/migrating-from-wire.md
+    about: Check the API mapping and known behavior differences before migrating.
