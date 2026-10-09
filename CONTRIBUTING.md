@@ -22,7 +22,10 @@ private application dump. Remove secrets, credentials and personal data.
 Go 1.27.1+ is required for the current release.
 
 `make check` also requires golangci-lint v2.13.2 (or a compatible version built
-with Go 1.27+). The configuration checks returned errors, including blank assignments:
+with Go 1.27+). The configuration checks returned errors, including blank assignments,
+wrapping and error comparisons. It does not cap repeated issues or hide stdout/stderr
+failures through the default exclusion presets. In-memory writers with documented
+infallible writes are the only targeted errcheck exemptions:
 
 ```sh
 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2

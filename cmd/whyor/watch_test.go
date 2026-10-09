@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,9 +24,38 @@ func TestSnapshotMissingRoot(t *testing.T) {
 	}
 }
 
+func TestWatchReturnsCallbackError(t *testing.T) {
+	cause := errors.New("output failed")
+	err := watch(context.Background(), t.TempDir(), time.Millisecond, func() error { return cause })
+	if !errors.Is(err, cause) || !strings.Contains(err.Error(), "initial watch callback") {
+		t.Fatalf("callback error was lost: %v", err)
+	}
+}
+
+func TestWatchReturnsCallbackErrorAfterChange(t *testing.T) {
+	cause := errors.New("later output failed")
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	calls := 0
+	err := watch(ctx, dir, time.Millisecond, func() error {
+		calls++
+		if calls == 1 {
+			if err := os.WriteFile(filepath.Join(dir, "new.go"), []byte("package x\n"), 0o644); err != nil {
+				return fmt.Errorf("create changed watch fixture: %w", err)
+			}
+			return nil
+		}
+		return cause
+	})
+	if calls != 2 || !errors.Is(err, cause) {
+		t.Fatalf("later callback error was lost: calls=%d error=%v", calls, err)
+	}
+}
+
 func TestWatchFailsBeforeGenerationOnSnapshotError(t *testing.T) {
 	called := false
-	err := watch(context.Background(), filepath.Join(t.TempDir(), "missing"), time.Millisecond, func() { called = true })
+	err := watch(context.Background(), filepath.Join(t.TempDir(), "missing"), time.Millisecond, func() error { called = true; return nil })
 	if called || !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("watch used a failed snapshot: called=%v error=%v", called, err)
 	}
@@ -38,10 +68,11 @@ func TestWatchPropagatesLaterFilesystemFailure(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	err := watch(ctx, root, time.Millisecond, func() {
+	err := watch(ctx, root, time.Millisecond, func() error {
 		if err := os.Remove(root); err != nil {
 			t.Fatal(err)
 		}
+		return nil
 	})
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("later snapshot error was lost: %v", err)

@@ -62,7 +62,7 @@ func TestWatchRunsOnChange(t *testing.T) {
 	runs := make(chan struct{}, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- watch(ctx, dir, 10*time.Millisecond, func() { runs <- struct{}{} }) }()
+	go func() { done <- watch(ctx, dir, 10*time.Millisecond, func() error { runs <- struct{}{}; return nil }) }()
 	t.Cleanup(func() {
 		cancel()
 		select {

@@ -53,12 +53,14 @@ func snapshot(root string) (map[string]stamp, error) {
 
 // watch calls fn once, then again each time a Go file under root changes,
 // until ctx is done or filesystem inspection fails. It polls, so it needs no extra dependency.
-func watch(ctx context.Context, root string, every time.Duration, fn func()) error {
+func watch(ctx context.Context, root string, every time.Duration, fn func() error) error {
 	last, err := snapshot(root)
 	if err != nil {
 		return err
 	}
-	fn()
+	if err := fn(); err != nil {
+		return fmt.Errorf("run initial watch callback: %w", err)
+	}
 	tick := time.NewTicker(every)
 	defer tick.Stop()
 	for {
@@ -72,7 +74,9 @@ func watch(ctx context.Context, root string, every time.Duration, fn func()) err
 			}
 			if !maps.Equal(cur, last) {
 				last = cur
-				fn()
+				if err := fn(); err != nil {
+					return fmt.Errorf("run watch callback after change: %w", err)
+				}
 			}
 		}
 	}
