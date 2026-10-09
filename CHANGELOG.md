@@ -6,6 +6,19 @@ whyor is pre-1.0; review release notes before upgrading.
 
 ## [Unreleased]
 
+### Error handling
+
+- Check init skeleton writes and closure errors together; reject unreadable package
+  clauses and invalid fallback package names instead of silently ignoring failures.
+- Preserve temporary-output write, close and cleanup errors with errors.Join.
+- Check fixture writes, reads and cleanup errors in tests.
+- Add errcheck with blank-assignment checks to local, CI and release validation.
+- Wrap filesystem, package-loading and rendering failures with operation/path
+  context and %w, preserving errors.Is/errors.As through joined cleanup failures.
+- Watch mode exits with a contextualized error when filesystem inspection fails,
+  rather than treating a partial snapshot as a valid change. Normal deletions
+  during polling remain supported; generation errors still keep watch running.
+
 ### Documentation
 
 - Runnable showcase application and a five-screen terminal demo with a recording

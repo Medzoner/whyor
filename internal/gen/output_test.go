@@ -2,11 +2,31 @@ package gen
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
+
+func TestOutputFilesystemErrorsPreserveCauses(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := readOutput(filepath.Join(file, genFile))
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) || !strings.Contains(err.Error(), "inspect generated file") {
+		t.Fatalf("missing inspection cause/context: %v", err)
+	}
+	output := outputFile{path: filepath.Join(dir, "missing", genFile), source: []byte(generatedHeader + "\npackage x\n")}
+	err = output.write()
+	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "create temporary output") {
+		t.Fatalf("missing creation cause/context: %v", err)
+	}
+}
 
 func TestOutputPreservesUnownedFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -63,7 +83,11 @@ func TestGenerationValidatesAllPackagesBeforeWriting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("remove fixture: %v", err)
+		}
+	})
 	for _, name := range []string{"a", "b"} {
 		if err := os.Mkdir(filepath.Join(dir, name), 0o755); err != nil {
 			t.Fatal(err)

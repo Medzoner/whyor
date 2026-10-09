@@ -8,6 +8,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Check returned errors
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.2
+          args: -c .golangci.yml --timeout=5m
       - run: go vet ./...
       - run: go test ./...
       - run: go run ./cmd/whyor check ./...
