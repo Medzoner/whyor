@@ -93,7 +93,7 @@ func runWatch(pkgs []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	fmt.Fprintln(os.Stderr, "whyor: watching for changes, Ctrl+C to stop")
-	watch(ctx, ".", 500*time.Millisecond, func() {
+	err := watch(ctx, ".", 500*time.Millisecond, func() {
 		files, err := gen.Run(".", pkgs, true)
 		for _, f := range files {
 			fmt.Println(f)
@@ -102,5 +102,8 @@ func runWatch(pkgs []string) error {
 			fmt.Fprintln(os.Stderr, "whyor:", err)
 		}
 	})
+	if err != nil {
+		return fmt.Errorf("watch packages %q: %w", pkgs, err)
+	}
 	return nil
 }
