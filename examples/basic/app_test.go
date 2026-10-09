@@ -7,8 +7,11 @@ func TestInitApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cleanup()
 	if got := app.Store.Get(1); got != "db/1" {
 		t.Fatalf("got %q", got)
+	}
+	cleanup()
+	if !app.Store.(*PG).closed {
+		t.Fatal("cleanup did not close the example store")
 	}
 }

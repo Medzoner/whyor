@@ -3,7 +3,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"time"
@@ -20,12 +22,20 @@ const usage = `usage:
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "whyor:", err)
+		if reportErr := reportError(os.Stderr, err); reportErr != nil {
+			// There is no reliable diagnostic destination left. Signal that the
+			// command failed and its diagnostic could not be written.
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }
 
 func run(args []string) error {
+	return runWithWriters(args, os.Stdout, os.Stderr)
+}
+
+func runWithWriters(args []string, out, diagnostic io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
 	}
@@ -37,10 +47,10 @@ func run(args []string) error {
 			dir = rest[0]
 		}
 		path, err := initFile(dir)
-		if err == nil {
-			fmt.Println(path)
+		if err != nil {
+			return err
 		}
-		return err
+		return writeLines(out, []string{path})
 	case "show":
 		if len(rest) == 0 {
 			rest = []string{"./..."}
@@ -53,57 +63,86 @@ func run(args []string) error {
 			rest = []string{"./..."}
 		}
 		tree, err := gen.Show(".", rest, format)
-		fmt.Print(tree)
-		return err
+		if err != nil {
+			return fmt.Errorf("show dependencies: %w", err)
+		}
+		if _, err := io.WriteString(out, tree); err != nil {
+			return fmt.Errorf("write dependency graph: %w", err)
+		}
+		return nil
 	case "unused":
 		if len(rest) == 0 {
 			rest = []string{"./..."}
 		}
 		list, err := gen.Unused(".", rest)
-		for _, l := range list {
-			fmt.Println(l)
+		if err != nil {
+			return fmt.Errorf("check unused providers: %w", err)
 		}
-		if err == nil && len(list) > 0 {
-			err = fmt.Errorf("%d unused provider(s)", len(list))
+		if err := writeLines(out, list); err != nil {
+			return err
 		}
-		return err
+		if len(list) > 0 {
+			return fmt.Errorf("%d unused provider(s)", len(list))
+		}
+		return nil
 	case "gen", "check":
 		if cmd == "gen" && len(rest) > 0 && rest[0] == "-w" {
-			return runWatch(rest[1:])
+			return runWatch(rest[1:], out, diagnostic)
 		}
 		if len(rest) == 0 {
 			rest = []string{"./..."}
 		}
 		files, err := gen.Run(".", rest, cmd == "gen")
-		for _, f := range files {
-			fmt.Println(f)
+		if err != nil {
+			return fmt.Errorf("%s packages: %w", cmd, err)
 		}
-		if err == nil && cmd == "check" && len(files) > 0 {
-			err = fmt.Errorf("%d generated file(s) are stale; run whyor gen", len(files))
+		if err := writeLines(out, files); err != nil {
+			return err
 		}
-		return err
+		if cmd == "check" && len(files) > 0 {
+			return fmt.Errorf("%d generated file(s) are stale; run whyor gen", len(files))
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown command %q\n%s", cmd, usage)
 }
 
-func runWatch(pkgs []string) error {
+func runWatch(pkgs []string, out, diagnostic io.Writer) error {
 	if len(pkgs) == 0 {
 		pkgs = []string{"./..."}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	fmt.Fprintln(os.Stderr, "whyor: watching for changes, Ctrl+C to stop")
-	err := watch(ctx, ".", 500*time.Millisecond, func() {
+	if _, err := fmt.Fprintln(diagnostic, "whyor: watching for changes, Ctrl+C to stop"); err != nil {
+		return fmt.Errorf("write watch startup diagnostic: %w", err)
+	}
+	err := watch(ctx, ".", 500*time.Millisecond, func() error {
 		files, err := gen.Run(".", pkgs, true)
-		for _, f := range files {
-			fmt.Println(f)
-		}
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "whyor:", err)
+			// Generation errors remain recoverable, unless their diagnostic cannot
+			// be delivered. Broken output is terminal, not silently retried.
+			return reportError(diagnostic, err)
 		}
+		return writeLines(out, files)
 	})
 	if err != nil {
 		return fmt.Errorf("watch packages %q: %w", pkgs, err)
+	}
+	return nil
+}
+
+func writeLines(w io.Writer, lines []string) error {
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return fmt.Errorf("write command output: %w", err)
+		}
+	}
+	return nil
+}
+
+func reportError(w io.Writer, cause error) error {
+	if _, err := fmt.Fprintln(w, "whyor:", cause); err != nil {
+		return fmt.Errorf("write command diagnostic: %w", errors.Join(cause, err))
 	}
 	return nil
 }

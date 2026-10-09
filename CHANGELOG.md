@@ -18,6 +18,12 @@ whyor is pre-1.0; review release notes before upgrading.
 - Watch mode exits with a contextualized error when filesystem inspection fails,
   rather than treating a partial snapshot as a valid change. Normal deletions
   during polling remain supported; generation errors still keep watch running.
+- CLI stdout/stderr and watch callback failures are checked and wrapped; failed
+  output delivery stops watch instead of being silently retried.
+- Remove default lint exclusions and repeated-issue caps, retaining only targeted
+  in-memory writer exemptions. Enable wrapcheck and errorlint alongside errcheck.
+- Examples check their console writes; legacy cleanup no longer performs an
+  unchecked print. The showcase's visible output is unchanged.
 
 ### Documentation
 

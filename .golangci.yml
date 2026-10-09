@@ -1,8 +1,26 @@
 version: "2"
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0
 linters:
   default: none
   enable:
     - errcheck
+    - wrapcheck
+    - errorlint
+  exclusions:
+    presets: []
   settings:
     errcheck:
       check-blank: true
+      disable-default-exclusions: true
+      exclude-functions:
+        # In-memory writers document that their writes always return nil.
+        - (*bytes.Buffer).Write
+        - (*bytes.Buffer).WriteString
+        - (*strings.Builder).Write
+        - (*strings.Builder).WriteString
+        - fmt.Fprintf(*bytes.Buffer)
+        - fmt.Fprintf(*strings.Builder)
+        - fmt.Fprint(*bytes.Buffer)
+        - fmt.Fprint(*strings.Builder)
