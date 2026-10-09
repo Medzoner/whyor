@@ -11,13 +11,18 @@ import (
 
 func TestInit(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "app.go"), []byte("package shop\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "app.go"), []byte("package shop\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	path, err := initFile(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	src, _ := os.ReadFile(path)
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(string(src), "package shop\n") || !strings.HasPrefix(string(src), "//go:build whyor") {
 		t.Fatalf("unexpected skeleton:\n%s", src)
 	}
@@ -32,7 +37,11 @@ func TestInitUsesDirName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if src, _ := os.ReadFile(path); !strings.Contains(string(src), "package my_app\n") {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "package my_app\n") {
 		t.Fatalf("unexpected skeleton:\n%s", src)
 	}
 }
@@ -46,7 +55,9 @@ func TestUnknownCommand(t *testing.T) {
 func TestWatchRunsOnChange(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "a.go")
-	os.WriteFile(file, []byte("package a\n"), 0o644)
+	if err := os.WriteFile(file, []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	runs := make(chan struct{}, 10)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -63,10 +74,14 @@ func TestWatchRunsOnChange(t *testing.T) {
 	}
 	wait("initial")
 
-	os.WriteFile(file, []byte("package a\n\nvar X = 1\n"), 0o644)
+	if err := os.WriteFile(file, []byte("package a\n\nvar X = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	wait("after edit")
 
-	os.WriteFile(filepath.Join(dir, "whyor_gen.go"), []byte("package a\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "whyor_gen.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case <-runs:
 		t.Fatal("generated file must not retrigger")

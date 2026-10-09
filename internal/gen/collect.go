@@ -291,7 +291,10 @@ func (f *file) valueExpr(x ast.Expr, p *packages.Package) (string, error) {
 	}
 	var b bytes.Buffer
 	err = printer.Fprint(&b, p.Fset, x)
-	return b.String(), err
+	if err != nil {
+		return "", fmt.Errorf("render Value expression at %s: %w", p.Fset.Position(x.Pos()), err)
+	}
+	return b.String(), nil
 }
 
 // addStruct registers T and *T, both built from fields of struct T: the

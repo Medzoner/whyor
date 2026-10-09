@@ -21,6 +21,13 @@ private application dump. Remove secrets, credentials and personal data.
 
 Go 1.27.1+ is required for the current release.
 
+`make check` also requires golangci-lint v2.13.2 (or a compatible version built
+with Go 1.27+). The configuration checks returned errors, including blank assignments:
+
+```sh
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+```
+
 ```sh
 go run ./cmd/whyor gen ./examples/...
 make check

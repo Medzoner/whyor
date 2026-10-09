@@ -12,7 +12,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: make check
+      - name: Check returned errors
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.2
+          args: -c .golangci.yml --timeout=5m
+      - name: Validate generation and tests
+        run: |
+          make test
+          go run ./cmd/whyor check ./...
+          go run ./cmd/whyor unused ./...
       - name: Extract release notes
         env:
           RELEASE_TAG: ${{ github.ref_name }}

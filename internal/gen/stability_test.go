@@ -51,7 +51,11 @@ func TestInit(t *testing.T) { var e Events; r, cleanup, err := Init(context.Back
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { os.RemoveAll(dir) })
+			t.Cleanup(func() {
+				if err := os.RemoveAll(dir); err != nil {
+					t.Errorf("remove fixture: %v", err)
+				}
+			})
 			write := func(name, content string) {
 				t.Helper()
 				if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {

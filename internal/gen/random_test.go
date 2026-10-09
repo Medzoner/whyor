@@ -55,7 +55,11 @@ func checkRandomGraph(t *testing.T, rnd *rand.Rand) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("remove fixture: %v", err)
+		}
+	})
 	write := func(name, src string) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
 			t.Fatal(err)

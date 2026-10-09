@@ -100,13 +100,13 @@ func load(dir string, patterns []string) ([]*packages.Package, map[token.Pos]var
 		BuildFlags: []string{"-tags=whyor"},
 	}, patterns...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("load Go packages %q in %s: %w", patterns, dir, err)
 	}
 	decls := map[token.Pos]varDecl{}
 	var loadErr error
 	packages.Visit(pkgs, nil, func(p *packages.Package) {
 		if loadErr == nil && len(p.Errors) > 0 {
-			loadErr = fmt.Errorf("%s: %v", p.PkgPath, p.Errors[0])
+			loadErr = fmt.Errorf("type-check package %s: %w", p.PkgPath, p.Errors[0])
 		}
 		for _, f := range p.Syntax {
 			indexVars(p, f, decls)
@@ -197,7 +197,7 @@ func generate(pkg *packages.Package, decls map[token.Pos]varDecl, opts options) 
 					filename := pkg.Fset.Position(f.Pos()).Filename
 					matches, err := build.Default.MatchFile(filepath.Dir(filename), filepath.Base(filename))
 					if err != nil {
-						return nil, err
+						return nil, fmt.Errorf("evaluate build constraints in %s: %w", filename, err)
 					}
 					if matches {
 						return nil, fmt.Errorf("%s: injector file must be excluded from the default build with //go:build whyor", filename)

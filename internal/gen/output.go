@@ -21,14 +21,14 @@ func readOutput(path string) ([]byte, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("inspect generated file: %w", err)
+		return nil, fmt.Errorf("inspect generated file %s: %w", path, err)
 	}
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("refusing to replace non-regular generated file %s", path)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read generated file %s: %w", path, err)
 	}
 	if !bytes.HasPrefix(data, []byte(generatedHeader+"\n")) {
 		return nil, fmt.Errorf("refusing to overwrite %s: missing whyor generated header", path)
@@ -38,25 +38,36 @@ func readOutput(path string) ([]byte, error) {
 
 // Write via a same-directory temporary file and rename, never truncating an
 // existing output. This is not a transaction across several output files.
-func (o outputFile) write() error {
+func (o outputFile) write() (err error) {
 	if _, err := readOutput(o.path); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(o.path), ".whyor-*.tmp")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temporary output for %s: %w", o.path, err)
 	}
-	defer os.Remove(f.Name())
+	closed := false
+	defer func() {
+		if !closed {
+			if closeErr := f.Close(); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close temporary output %s: %w", f.Name(), closeErr))
+			}
+		}
+		// Successful rename removes the temporary path; that absence is expected.
+		if removeErr := os.Remove(f.Name()); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			err = errors.Join(err, fmt.Errorf("remove temporary output %s: %w", f.Name(), removeErr))
+		}
+	}()
 	if _, err := f.Write(o.source); err != nil {
-		f.Close()
-		return err
+		return fmt.Errorf("write temporary output %s: %w", f.Name(), err)
 	}
 	if err := f.Chmod(0o644); err != nil {
-		f.Close()
-		return err
+		return fmt.Errorf("set temporary output permissions %s: %w", f.Name(), err)
 	}
-	if err := f.Close(); err != nil {
-		return err
+	closeErr := f.Close()
+	closed = true
+	if closeErr != nil {
+		return fmt.Errorf("close temporary output %s: %w", f.Name(), closeErr)
 	}
 	if err := os.Rename(f.Name(), o.path); err != nil {
 		return fmt.Errorf("replace generated file %s: %w", o.path, err)

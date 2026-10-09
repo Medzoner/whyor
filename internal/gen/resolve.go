@@ -226,7 +226,10 @@ func (r *resolver) emit(b *binding) (string, error) {
 		r.cleanups = append(r.cleanups, cleanupCall{name: cleanupName, context: b.res.lifecycle, err: b.res.lifecycle})
 	}
 	if closer {
-		stmt, _ := closeStmt(b.out, v)
+		stmt, err := closeStmt(b.out, v)
+		if err != nil {
+			return "", err
+		}
 		r.cleanups = append(r.cleanups, cleanupCall{name: v + ".Close", err: strings.HasPrefix(stmt, "_ = ")})
 	}
 	r.fns[key] = v

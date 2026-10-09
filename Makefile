@@ -1,4 +1,4 @@
-.PHONY: build install uninstall test check
+.PHONY: build install uninstall test lint check
 
 BIN := whyor
 
@@ -15,6 +15,9 @@ test:
 	go vet ./...
 	go test ./...
 
-check: test
+lint:
+	golangci-lint run -c .golangci.yml
+
+check: test lint
 	go run ./cmd/whyor check ./...
 	go run ./cmd/whyor unused ./...
