@@ -4,7 +4,7 @@ Notable changes are recorded here starting with v0.8.0. Earlier releases are
 available in the [GitHub release history](https://github.com/Medzoner/whyor/releases).
 whyor is pre-1.0; review release notes before upgrading.
 
-## [Unreleased]
+## [v0.12.0]
 
 ### Error handling
 
@@ -24,6 +24,25 @@ whyor is pre-1.0; review release notes before upgrading.
   in-memory writer exemptions. Enable wrapcheck and errorlint alongside errcheck.
 - Examples check their console writes; legacy cleanup no longer performs an
   unchecked print. The showcase's visible output is unchanged.
+
+### Upgrade notes
+
+- Requires Go **1.27.1+**; public declaration signatures and JSON graph schema
+  are unchanged.
+- No code change is required to upgrade. Error messages are more specific and
+  now carry operation/path context; do not match on their exact text.
+- In watch mode, an unwritable stdout/stderr now stops the watcher with an
+  error instead of being silently retried. Generation failures still keep the
+  watcher running.
+- Local `make check` runs errcheck, wrapcheck and errorlint without default
+  exclusions; update custom lint configuration accordingly.
+
+```sh
+go install github.com/Medzoner/whyor/cmd/whyor@v0.12.0
+go get github.com/Medzoner/whyor@v0.12.0
+whyor gen ./...
+go test ./...
+```
 
 ### Documentation
 
@@ -187,7 +206,8 @@ whyor gen ./...
 go test ./...
 ```
 
-[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.12.0...HEAD
+[v0.12.0]: https://github.com/Medzoner/whyor/compare/v0.11.0...v0.12.0
 [v0.11.0]: https://github.com/Medzoner/whyor/compare/v0.10.0...v0.11.0
 [v0.10.0]: https://github.com/Medzoner/whyor/compare/v0.9.0...v0.10.0
 [v0.9.0]: https://github.com/Medzoner/whyor/compare/v0.8.0...v0.9.0
