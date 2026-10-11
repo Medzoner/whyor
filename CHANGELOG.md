@@ -4,7 +4,7 @@ Notable changes are recorded here starting with v0.8.0. Earlier releases are
 available in the [GitHub release history](https://github.com/Medzoner/whyor/releases).
 whyor is pre-1.0; review release notes before upgrading.
 
-## [Unreleased]
+## [v0.12.1]
 
 ### Linting
 
@@ -20,6 +20,22 @@ whyor is pre-1.0; review release notes before upgrading.
 - Keep targeted exemptions only: infallible in-memory writers for errcheck
   and test files for complexity/duplication linters.
 - `make check` runs the full set; a `lint-fix` target was added to the Makefile.
+
+### Upgrade notes
+
+- Requires Go **1.27.1+**; public declaration signatures, generated output and
+  the JSON graph schema are unchanged.
+- `whyor init` now creates the package directory `0750` and the skeleton
+  `0600` (owner-only). Re-running init on an existing file still fails.
+- No `//nolint` is used; local lint configuration can rely on the shipped
+  `.golangci.yml` thresholds.
+
+```sh
+go install github.com/Medzoner/whyor/cmd/whyor@v0.12.1
+go get github.com/Medzoner/whyor@v0.12.1
+whyor gen ./...
+go test ./...
+```
 
 ## [v0.12.0]
 
@@ -223,7 +239,8 @@ whyor gen ./...
 go test ./...
 ```
 
-[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/Medzoner/whyor/compare/v0.12.1...HEAD
+[v0.12.1]: https://github.com/Medzoner/whyor/compare/v0.12.0...v0.12.1
 [v0.12.0]: https://github.com/Medzoner/whyor/compare/v0.11.0...v0.12.0
 [v0.11.0]: https://github.com/Medzoner/whyor/compare/v0.10.0...v0.11.0
 [v0.10.0]: https://github.com/Medzoner/whyor/compare/v0.9.0...v0.10.0
