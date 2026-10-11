@@ -4,8 +4,10 @@ import "fmt"
 
 type Handler interface{ Name() string }
 
-type Users struct{}
-type Orders struct{}
+type (
+	Users  struct{}
+	Orders struct{}
+)
 
 func (*Users) Name() string  { return "users" }
 func (*Orders) Name() string { return "orders" }

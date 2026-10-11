@@ -131,7 +131,7 @@ func (r *resolver) autoCandidates(t types.Type) []types.Type {
 	return found
 }
 
-func (r *resolver) emit(b *binding) (string, error) {
+func (r *resolver) emit(b *binding) (string, error) { //nolint:cyclop,funlen // code-generation switch over every binding kind
 	switch {
 	case b.target != nil:
 		return r.resolve(b.target)

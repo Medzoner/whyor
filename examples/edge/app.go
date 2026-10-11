@@ -16,11 +16,13 @@ type Out struct {
 	B       *blog.T
 }
 
-type Res struct{ n int }
+type Res struct{}
 
-type R1 Res
-type R2 Res
-type R3 Res
+type (
+	R1 Res
+	R2 Res
+	R3 Res
+)
 
 var Events []string
 

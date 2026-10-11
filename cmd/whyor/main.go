@@ -35,6 +35,7 @@ func run(args []string) error {
 	return runWithWriters(args, os.Stdout, os.Stderr)
 }
 
+//nolint:cyclop,funlen // CLI argument dispatch: one branch per subcommand, no nested logic
 func runWithWriters(args []string, out, diagnostic io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)

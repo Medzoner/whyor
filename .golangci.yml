@@ -1,15 +1,64 @@
 version: "2"
+
+run:
+  issues-exit-code: 1
+
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0
+
 linters:
   default: none
-  enable:
-    - errcheck
-    - wrapcheck
-    - errorlint
   exclusions:
     presets: []
+    paths:
+      - '\.cache'
+      - '^var/'
+    rules:
+      - path: _test\.go
+        linters:
+          - cyclop
+          - gosec
+          - dupl
+          - funlen
+          - errchkjson
+          - depguard
+          - govet
+          - prealloc
+          - gocritic
+  enable:
+    - errcheck
+    # gosimple is merged into staticcheck in golangci-lint v2.
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - asasalint
+    - bidichk
+    - bodyclose
+    - contextcheck
+    - cyclop
+    - durationcheck
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - funlen
+    - gocognit
+    - gocritic
+    - gosec
+    - maintidx
+    - makezero
+    - musttag
+    - nestif
+    - nilerr
+    - noctx
+    - nosprintfhostport
+    - prealloc
+    - spancheck
+    - tagalign
+    - wrapcheck
+    - zerologlint
   settings:
     errcheck:
       check-blank: true
@@ -24,3 +73,26 @@ linters:
         - fmt.Fprintf(*strings.Builder)
         - fmt.Fprint(*bytes.Buffer)
         - fmt.Fprint(*strings.Builder)
+    gocognit:
+      min-complexity: 40
+    cyclop:
+      max-complexity: 25
+    funlen:
+      lines: 80
+      statements: 50
+    nestif:
+      min-complexity: 8
+    exhaustive:
+      default-signifies-exhaustive: true
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/Medzoner/whyor)

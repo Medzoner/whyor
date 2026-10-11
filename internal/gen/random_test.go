@@ -99,7 +99,7 @@ func checkRandomGraph(t *testing.T, rnd *rand.Rand) {
 		}
 	}
 
-	cmd := exec.Command("go", "vet", pkg)
+	cmd := exec.CommandContext(t.Context(), "go", "vet", pkg)
 	cmd.Dir = "../.."
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated code does not compile: %v\n%s\n%s", err, b, out)

@@ -2,12 +2,14 @@ package main
 
 import "fmt"
 
-type Config struct{ Name string }
-type Store interface{ Message() string }
-type MemoryStore struct {
-	cfg    *Config
-	closed bool
-}
+type (
+	Config      struct{ Name string }
+	Store       interface{ Message() string }
+	MemoryStore struct {
+		cfg    *Config
+		closed bool
+	}
+)
 type App struct{ Store Store }
 
 func NewConfig(name string) *Config { return &Config{Name: name} }

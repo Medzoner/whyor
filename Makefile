@@ -18,6 +18,9 @@ test:
 lint:
 	golangci-lint run -c .golangci.yml
 
+lint-fix:
+	golangci-lint run -c .golangci.yml --fix
+
 check: test lint
 	go run ./cmd/whyor check ./...
 	go run ./cmd/whyor unused ./...

@@ -1,15 +1,19 @@
 package typeidentity
 
-type Number = int
-type Box[T any] struct{ Value T }
+type (
+	Number     = int
+	Box[T any] struct{ Value T }
+)
 
 func (b *Box[T]) Close() { var zero T; b.Value = zero }
 
-type Transform = func(Number) struct{ Value Number }
-type Options = struct {
-	Apply  func(Number) Number
-	Values []Box[Number]
-}
+type (
+	Transform = func(Number) struct{ Value Number }
+	Options   = struct {
+		Apply  func(Number) Number
+		Values []Box[Number]
+	}
+)
 
 type Reader = interface {
 	Read(Number) Number

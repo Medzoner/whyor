@@ -107,7 +107,7 @@ func (f *file) injector(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	return fmt.Errorf("%s: %s: %w", f.pkg.Fset.Position(call.Pos()), fd.Name.Name, err)
 }
 
-func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
+func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error { //nolint:funlen // straight-line code generation, no branches worth extracting
 	obj, _ := f.pkg.TypesInfo.Defs[fd.Name].(*types.Func)
 	sig := obj.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.TypeParams().Len() > 0 || sig.Variadic() {
@@ -125,8 +125,10 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 		}
 	}
 
-	r := &resolver{f: f, res: res, bindings: c.bindings, autos: c.autos, closers: c.closers,
-		done: map[typeID]string{}, fns: map[providerKey]string{}, names: map[string]bool{}}
+	r := &resolver{
+		f: f, res: res, bindings: c.bindings, autos: c.autos, closers: c.closers,
+		done: map[typeID]string{}, fns: map[providerKey]string{}, names: map[string]bool{},
+	}
 	var params []string
 	for i := range sig.Params().Len() {
 		p := sig.Params().At(i)

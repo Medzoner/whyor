@@ -131,7 +131,10 @@ func (c *collector) add(b *binding) error {
 	return nil
 }
 
-func (c *collector) collect(x ast.Expr, p *packages.Package) error {
+// collect walks one declaration expression. It is the single entry point for
+// every provider form (function, method, struct literal, value, bind, many,
+// generic instantiation); its cognitive complexity is a known, tracked cost.
+func (c *collector) collect(x ast.Expr, p *packages.Package) error { //nolint:gocognit,cyclop,funlen // documented hotspot, split tracked pre-v1.0
 	x = ast.Unparen(x)
 	at := p.Fset.Position(x.Pos())
 	switch v := x.(type) {

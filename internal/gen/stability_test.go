@@ -69,7 +69,7 @@ func TestInit(t *testing.T) { var e Events; r, cleanup, err := Init(context.Back
 			if _, err := Run("../..", []string{pattern}, true); err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("go", "test", pattern)
+			cmd := exec.CommandContext(t.Context(), "go", "test", pattern)
 			cmd.Dir = "../.."
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("generated package fails: %v\n%s", err, out)

@@ -19,10 +19,12 @@ type Events struct {
 	Fail     bool
 }
 
-type Legacy struct{}
-type Cache struct{}
-type Socket struct{ events *Events }
-type App struct{}
+type (
+	Legacy struct{}
+	Cache  struct{}
+	Socket struct{ events *Events }
+	App    struct{}
+)
 
 func NewLegacy(events *Events) (*Legacy, func()) {
 	return &Legacy{}, func() { events.Order = append(events.Order, "legacy") }

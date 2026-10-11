@@ -32,8 +32,10 @@ func TestGenericCallsAndGraph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, call := range []string{"providers.NewRepository[User](", "providers.NewRepository[Order](",
-		"providers.NewLabel[User](", "providers.NewLabel[Order](", "providers.NewPair[User, Order]("} {
+	for _, call := range []string{
+		"providers.NewRepository[User](", "providers.NewRepository[Order](",
+		"providers.NewLabel[User](", "providers.NewLabel[Order](", "providers.NewPair[User, Order](",
+	} {
 		if strings.Count(string(src), call) != 1 {
 			t.Fatalf("expected one call of %s:\n%s", call, src)
 		}
