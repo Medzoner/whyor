@@ -131,88 +131,136 @@ func (r *resolver) autoCandidates(t types.Type) []types.Type {
 	return found
 }
 
-func (r *resolver) emit(b *binding) (string, error) { //nolint:cyclop,funlen // code-generation switch over every binding kind
+// emit writes the statement producing b's value and returns its local name.
+// Each binding form has a dedicated writer; the function-call form carries the
+// error, cleanup and Closer bookkeeping.
+func (r *resolver) emit(b *binding) (string, error) {
 	switch {
 	case b.target != nil:
 		return r.resolve(b.target)
 	case b.many:
-		vs := make([]string, len(b.elems))
-		for i, e := range b.elems {
-			v, err := r.emit(e)
-			if err != nil {
-				return "", err
-			}
-			vs[i] = v
-		}
-		v := r.next()
-		fmt.Fprintf(&r.lines, "\t%s := %s{%s}\n", v, r.f.typ(b.out), strings.Join(vs, ", "))
-		return v, nil
+		return r.emitMany(b)
 	case b.field != "":
-		src, err := r.resolve(b.ins[0])
+		return r.emitField(b)
+	case b.fields != nil:
+		return r.emitStructLit(b)
+	case b.fn == nil:
+		return r.emitValue(b)
+	}
+	return r.emitCall(b)
+}
+
+func (r *resolver) emitMany(b *binding) (string, error) {
+	vs := make([]string, len(b.elems))
+	for i, e := range b.elems {
+		v, err := r.emit(e)
 		if err != nil {
 			return "", err
 		}
-		v := r.next()
-		fmt.Fprintf(&r.lines, "\t%s := %s.%s\n", v, src, b.field)
-		return v, nil
-	case b.fields != nil:
-		parts := make([]string, len(b.ins))
-		for i, in := range b.ins {
-			a, err := r.resolve(in)
-			if err != nil {
-				return "", err
-			}
-			parts[i] = b.fields[i] + ": " + a
-		}
-		lit, typ := "", b.out
-		if b.ptr {
-			lit, typ = "&", b.out.(*types.Pointer).Elem()
-		}
-		v := r.next()
-		fmt.Fprintf(&r.lines, "\t%s := %s%s{%s}\n", v, lit, r.f.typ(typ), strings.Join(parts, ", "))
-		return v, nil
-	case b.fn == nil:
-		v := r.next()
-		fmt.Fprintf(&r.lines, "\tvar %s %s = %s\n", v, r.f.typ(b.out), b.expr)
-		return v, nil
+		vs[i] = v
 	}
+	v := r.next()
+	fmt.Fprintf(&r.lines, "\t%s := %s{%s}\n", v, r.f.typ(b.out), strings.Join(vs, ", "))
+	return v, nil
+}
 
-	key := r.f.types.provider(b.fn, b.args)
-	if v, ok := r.fns[key]; ok {
-		return v, nil
+func (r *resolver) emitField(b *binding) (string, error) {
+	src, err := r.resolve(b.ins[0])
+	if err != nil {
+		return "", err
 	}
-	args := make([]string, len(b.ins))
+	v := r.next()
+	fmt.Fprintf(&r.lines, "\t%s := %s.%s\n", v, src, b.field)
+	return v, nil
+}
+
+func (r *resolver) emitStructLit(b *binding) (string, error) {
+	parts := make([]string, len(b.ins))
 	for i, in := range b.ins {
 		a, err := r.resolve(in)
 		if err != nil {
 			return "", err
 		}
+		parts[i] = b.fields[i] + ": " + a
+	}
+	lit, typ := "", b.out
+	if b.ptr {
+		lit, typ = "&", b.out.(*types.Pointer).Elem()
+	}
+	v := r.next()
+	fmt.Fprintf(&r.lines, "\t%s := %s%s{%s}\n", v, lit, r.f.typ(typ), strings.Join(parts, ", "))
+	return v, nil
+}
+
+func (r *resolver) emitValue(b *binding) (string, error) {
+	v := r.next()
+	fmt.Fprintf(&r.lines, "\tvar %s %s = %s\n", v, r.f.typ(b.out), b.expr)
+	return v, nil
+}
+
+func (r *resolver) emitCall(b *binding) (string, error) {
+	key := r.f.types.provider(b.fn, b.args)
+	if v, ok := r.fns[key]; ok {
+		return v, nil
+	}
+	args, err := r.resolveArgs(b.ins)
+	if err != nil {
+		return "", err
+	}
+	if err := r.checkCallSignature(b); err != nil {
+		return "", err
+	}
+
+	v, cleanupName := r.writeCall(b, args)
+	if b.res.cleanup {
+		r.cleanups = append(r.cleanups, cleanupCall{name: cleanupName, context: b.res.lifecycle, err: b.res.lifecycle})
+	}
+	if !b.res.cleanup && r.closers[r.f.types.key(b.out)] {
+		if err := r.registerCloser(b, v); err != nil {
+			return "", err
+		}
+	}
+	r.fns[key] = v
+	return v, nil
+}
+
+func (r *resolver) resolveArgs(ins []types.Type) ([]string, error) {
+	args := make([]string, len(ins))
+	for i, in := range ins {
+		a, err := r.resolve(in)
+		if err != nil {
+			return nil, err
+		}
 		args[i] = a
 	}
+	return args, nil
+}
+
+// checkCallSignature rejects providers whose results the injector cannot carry.
+func (r *resolver) checkCallSignature(b *binding) error {
 	if b.res.err && !r.res.err {
-		return "", fmt.Errorf("provider %s returns an error but the injector does not", b.fn.Name())
+		return fmt.Errorf("provider %s returns an error but the injector does not", b.fn.Name())
 	}
 	if b.res.cleanup && !r.res.cleanup {
-		return "", fmt.Errorf("provider %s returns a cleanup but the injector does not", b.fn.Name())
+		return fmt.Errorf("provider %s returns a cleanup but the injector does not", b.fn.Name())
 	}
 	if b.res.lifecycle && !r.res.lifecycle {
-		return "", fmt.Errorf("provider %s returns a context-aware cleanup; the injector must return whyor.Cleanup or func(context.Context) error", r.f.callName(b))
+		return fmt.Errorf("provider %s returns a context-aware cleanup; the injector must return whyor.Cleanup or func(context.Context) error", r.f.callName(b))
 	}
-
-	closer := false
-	if !b.res.cleanup && r.closers[r.f.types.key(b.out)] {
-		if !r.res.cleanup {
-			return "", fmt.Errorf("%s has a Closer but the injector returns no cleanup", r.f.typ(b.out))
-		}
-		closer = true
+	if !b.res.cleanup && r.closers[r.f.types.key(b.out)] && !r.res.cleanup {
+		return fmt.Errorf("%s has a Closer but the injector returns no cleanup", r.f.typ(b.out))
 	}
+	return nil
+}
 
-	v := r.next()
-	lhs := []string{v}
-	cleanupName := ""
+// writeCall emits the call statement and, when the provider returns an error,
+// its guarded failure return. It returns the value and cleanup local names.
+func (r *resolver) writeCall(b *binding, args []string) (value, cleanup string) {
+	value = r.next()
+	lhs := []string{value}
 	if b.res.cleanup {
-		cleanupName = r.localName(fmt.Sprintf("cleanup%d", r.n))
-		lhs = append(lhs, cleanupName)
+		cleanup = r.localName(fmt.Sprintf("cleanup%d", r.n))
+		lhs = append(lhs, cleanup)
 	}
 	if b.res.err {
 		lhs = append(lhs, r.errName)
@@ -222,18 +270,16 @@ func (r *resolver) emit(b *binding) (string, error) { //nolint:cyclop,funlen // 
 	if b.res.err {
 		fmt.Fprintf(&r.lines, "\tif %s != nil {\n%s\t\treturn %s\n\t}\n", r.errName, r.cleanupCalls("\t\t", r.failureContext()), r.failReturn())
 	}
-	if b.res.cleanup {
-		r.cleanups = append(r.cleanups, cleanupCall{name: cleanupName, context: b.res.lifecycle, err: b.res.lifecycle})
+	return value, cleanup
+}
+
+func (r *resolver) registerCloser(b *binding, v string) error {
+	stmt, err := closeStmt(b.out, v)
+	if err != nil {
+		return err
 	}
-	if closer {
-		stmt, err := closeStmt(b.out, v)
-		if err != nil {
-			return "", err
-		}
-		r.cleanups = append(r.cleanups, cleanupCall{name: v + ".Close", err: strings.HasPrefix(stmt, "_ = ")})
-	}
-	r.fns[key] = v
-	return v, nil
+	r.cleanups = append(r.cleanups, cleanupCall{name: v + ".Close", err: strings.HasPrefix(stmt, "_ = ")})
+	return nil
 }
 
 func (r *resolver) next() string {

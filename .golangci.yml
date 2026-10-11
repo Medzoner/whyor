@@ -26,6 +26,17 @@ linters:
           - govet
           - prealloc
           - gocritic
+      # A generator legitimately opens its own declared output and rolls back a
+      # half-written skeleton in the user-chosen init directory; both paths are
+      # constructed by whyor, not taken from remote input.
+      - path: 'internal/gen/output\.go'
+        linters:
+          - gosec
+        text: 'G304'
+      - path: 'cmd/whyor/init\.go'
+        linters:
+          - gosec
+        text: 'G304|G703'
   enable:
     - errcheck
     # gosimple is merged into staticcheck in golangci-lint v2.
@@ -74,14 +85,14 @@ linters:
         - fmt.Fprint(*bytes.Buffer)
         - fmt.Fprint(*strings.Builder)
     gocognit:
-      min-complexity: 40
+      min-complexity: 30
     cyclop:
-      max-complexity: 25
+      max-complexity: 15
     funlen:
-      lines: 80
-      statements: 50
+      lines: 60
+      statements: 40
     nestif:
-      min-complexity: 8
+      min-complexity: 5
     exhaustive:
       default-signifies-exhaustive: true
 

@@ -190,36 +190,8 @@ func generate(pkg *packages.Package, decls map[token.Pos]varDecl, opts options) 
 		g.tree = &strings.Builder{}
 	}
 	for _, f := range pkg.Syntax {
-		accepted := map[*ast.CallExpr]bool{}
-		for _, d := range f.Decls {
-			if fd, ok := d.(*ast.FuncDecl); ok {
-				if call := buildCall(pkg.TypesInfo, fd); call != nil {
-					filename := pkg.Fset.Position(f.Pos()).Filename
-					matches, err := build.Default.MatchFile(filepath.Dir(filename), filepath.Base(filename))
-					if err != nil {
-						return nil, fmt.Errorf("evaluate build constraints in %s: %w", filename, err)
-					}
-					if matches {
-						return nil, fmt.Errorf("%s: injector file must be excluded from the default build with //go:build whyor", filename)
-					}
-					accepted[call] = true
-					if err := g.injector(fd, call); err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-		var declarationErr error
-		ast.Inspect(f, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok && !accepted[call] {
-				if name, _ := api(pkg.TypesInfo, call.Fun); name == "Build" {
-					declarationErr = fmt.Errorf("%s: Build must be the sole panic(whyor.Build(...)) statement of an injector", pkg.Fset.Position(call.Pos()))
-				}
-			}
-			return declarationErr == nil
-		})
-		if declarationErr != nil {
-			return nil, declarationErr
+		if err := generateFile(pkg, g, f); err != nil {
+			return nil, err
 		}
 	}
 	if g.tree != nil {
@@ -233,6 +205,57 @@ func generate(pkg *packages.Package, decls map[token.Pos]varDecl, opts options) 
 		return nil, fmt.Errorf("%s: formatting generated code: %w", pkg.PkgPath, err)
 	}
 	return src, nil
+}
+
+// generateFile injects every injector declared in one source file and rejects
+// stray Build calls.
+func generateFile(pkg *packages.Package, g *file, f *ast.File) error {
+	accepted := map[*ast.CallExpr]bool{}
+	for _, d := range f.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		call := buildCall(pkg.TypesInfo, fd)
+		if call == nil {
+			continue
+		}
+		if err := checkInjectorBuildTag(pkg, f, fd); err != nil {
+			return err
+		}
+		accepted[call] = true
+		if err := g.injector(fd, call); err != nil {
+			return err
+		}
+	}
+	return checkStrayBuildCalls(pkg, f, accepted)
+}
+
+// checkInjectorBuildTag rejects an injector compiled into default builds.
+func checkInjectorBuildTag(pkg *packages.Package, f *ast.File, fd *ast.FuncDecl) error {
+	filename := pkg.Fset.Position(f.Pos()).Filename
+	matches, err := build.Default.MatchFile(filepath.Dir(filename), filepath.Base(filename))
+	if err != nil {
+		return fmt.Errorf("evaluate build constraints in %s: %w", filename, err)
+	}
+	if matches {
+		return fmt.Errorf("%s: injector file must be excluded from the default build with //go:build whyor", filename)
+	}
+	return nil
+}
+
+// checkStrayBuildCalls reports Build calls outside a recognised injector.
+func checkStrayBuildCalls(pkg *packages.Package, f *ast.File, accepted map[*ast.CallExpr]bool) error {
+	var declarationErr error
+	ast.Inspect(f, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && !accepted[call] {
+			if name, _ := api(pkg.TypesInfo, call.Fun); name == "Build" {
+				declarationErr = fmt.Errorf("%s: Build must be the sole panic(whyor.Build(...)) statement of an injector", pkg.Fset.Position(call.Pos()))
+			}
+		}
+		return declarationErr == nil
+	})
+	return declarationErr
 }
 
 // buildCall returns the whyor.Build call if fd's body is `panic(whyor.Build(...))`.

@@ -131,102 +131,133 @@ func (c *collector) add(b *binding) error {
 	return nil
 }
 
-// collect walks one declaration expression. It is the single entry point for
-// every provider form (function, method, struct literal, value, bind, many,
-// generic instantiation); its cognitive complexity is a known, tracked cost.
-func (c *collector) collect(x ast.Expr, p *packages.Package) error { //nolint:gocognit,cyclop,funlen // documented hotspot, split tracked pre-v1.0
+// collect walks one declaration expression: provider function, method, struct
+// literal, value, bind, many or generic instantiation. Each form is handled by
+// a dedicated method; collect only dispatches.
+func (c *collector) collect(x ast.Expr, p *packages.Package) error {
 	x = ast.Unparen(x)
 	at := p.Fset.Position(x.Pos())
 	switch v := x.(type) {
 	case *ast.CallExpr:
-		name, targs := api(p.TypesInfo, v.Fun)
-		switch name {
-		case "Set":
-			for _, a := range v.Args {
-				if err := c.collect(a, p); err != nil {
-					return err
-				}
-			}
-			return nil
-		case "Many":
-			if len(targs) != 1 || c.many != nil {
-				break
-			}
-			var elems []*binding
-			sub := *c
-			sub.many = &elems
-			for _, a := range v.Args {
-				if err := sub.collect(a, p); err != nil {
-					return err
-				}
-			}
-			for _, e := range elems {
-				if !types.AssignableTo(e.out, targs[0]) {
-					return fmt.Errorf("%s: Many: %s is not assignable to %s", at, c.f.typ(e.out), c.f.typ(targs[0]))
-				}
-			}
-			return c.add(&binding{position: at, out: types.NewSlice(targs[0]), many: true, elems: elems})
-		case "AutoBind", "Closer":
-			if len(targs) != 1 || c.many != nil {
-				break
-			}
-			if name == "AutoBind" {
-				c.autos = append(c.autos, targs[0])
-			} else if _, err := closeStmt(targs[0], "x"); err != nil {
-				return fmt.Errorf("%s: Closer: %w", at, err)
-			} else {
-				c.closers[c.f.types.key(targs[0])] = true
-			}
-			return nil
-		case "Bind":
-			if len(targs) != 2 || c.many != nil {
-				break
-			}
-			if iface, ok := targs[0].Underlying().(*types.Interface); !ok || !types.Implements(targs[1], iface) {
-				return fmt.Errorf("%s: Bind: %s does not implement %s", at, c.f.typ(targs[1]), c.f.typ(targs[0]))
-			}
-			return c.add(&binding{position: at, out: targs[0], target: targs[1]})
-		case "Struct":
-			if len(targs) != 1 || c.many != nil {
-				break
-			}
-			return c.addStruct(targs[0], v, p, at)
-		case "FieldsOf":
-			if len(targs) != 1 || c.many != nil {
-				break
-			}
-			return c.addFieldsOf(targs[0], v, p, at)
-		case "Value":
-			if len(targs) != 1 || len(v.Args) != 1 {
-				break
-			}
-			s, err := c.f.valueExpr(v.Args[0], p)
-			if err != nil {
+		return c.collectCall(v, p, at)
+	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
+		return c.collectRef(v, p, at)
+	}
+	return fmt.Errorf("%s: unsupported provider expression", at)
+}
+
+func (c *collector) collectCall(v *ast.CallExpr, p *packages.Package, at token.Position) error {
+	name, targs := api(p.TypesInfo, v.Fun)
+	switch name {
+	case "Set":
+		for _, a := range v.Args {
+			if err := c.collect(a, p); err != nil {
 				return err
 			}
-			return c.add(&binding{position: at, out: targs[0], expr: s})
 		}
-	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
-		id := functionIdent(v)
-		if id == nil {
-			break
+		return nil
+	case "Many":
+		return c.collectMany(v, p, targs, at)
+	case "AutoBind", "Closer":
+		return c.collectAuto(name, targs, at)
+	case "Bind":
+		return c.collectBind(targs, at)
+	case "Struct":
+		if len(targs) != 1 || c.many != nil {
+			return fmt.Errorf("%s: unsupported provider expression", at)
 		}
-		switch o := p.TypesInfo.Uses[id].(type) {
-		case *types.Func:
-			return c.addFunc(o, p.TypesInfo, id, at)
-		case *types.Var:
-			switch v.(type) {
-			case *ast.IndexExpr, *ast.IndexListExpr:
-				return fmt.Errorf("%s: indexed values are not provider declarations", at)
-			}
-			d, ok := c.f.decls[o.Pos()]
-			if !ok || c.visiting[o.Pos()] {
-				return fmt.Errorf("%s: cannot expand set %s", at, o.Name())
-			}
-			c.visiting[o.Pos()] = true
-			defer delete(c.visiting, o.Pos())
-			return c.collect(d.expr, d.pkg)
+		return c.addStruct(targs[0], v, p, at)
+	case "FieldsOf":
+		if len(targs) != 1 || c.many != nil {
+			return fmt.Errorf("%s: unsupported provider expression", at)
 		}
+		return c.addFieldsOf(targs[0], v, p, at)
+	case "Value":
+		return c.collectValue(targs, v, p, at)
+	}
+	return fmt.Errorf("%s: unsupported provider expression", at)
+}
+
+func (c *collector) collectMany(v *ast.CallExpr, p *packages.Package, targs []types.Type, at token.Position) error {
+	if len(targs) != 1 || c.many != nil {
+		return fmt.Errorf("%s: unsupported provider expression", at)
+	}
+	var elems []*binding
+	sub := *c
+	sub.many = &elems
+	for _, a := range v.Args {
+		if err := sub.collect(a, p); err != nil {
+			return err
+		}
+	}
+	for _, e := range elems {
+		if !types.AssignableTo(e.out, targs[0]) {
+			return fmt.Errorf("%s: Many: %s is not assignable to %s", at, c.f.typ(e.out), c.f.typ(targs[0]))
+		}
+	}
+	return c.add(&binding{position: at, out: types.NewSlice(targs[0]), many: true, elems: elems})
+}
+
+func (c *collector) collectAuto(name string, targs []types.Type, at token.Position) error {
+	if len(targs) != 1 || c.many != nil {
+		return fmt.Errorf("%s: unsupported provider expression", at)
+	}
+	if name == "AutoBind" {
+		c.autos = append(c.autos, targs[0])
+		return nil
+	}
+	if _, err := closeStmt(targs[0], "x"); err != nil {
+		return fmt.Errorf("%s: Closer: %w", at, err)
+	}
+	c.closers[c.f.types.key(targs[0])] = true
+	return nil
+}
+
+func (c *collector) collectBind(targs []types.Type, at token.Position) error {
+	if len(targs) != 2 || c.many != nil {
+		return fmt.Errorf("%s: unsupported provider expression", at)
+	}
+	iface, ok := targs[0].Underlying().(*types.Interface)
+	if !ok || !types.Implements(targs[1], iface) {
+		return fmt.Errorf("%s: Bind: %s does not implement %s", at, c.f.typ(targs[1]), c.f.typ(targs[0]))
+	}
+	return c.add(&binding{position: at, out: targs[0], target: targs[1]})
+}
+
+func (c *collector) collectValue(targs []types.Type, v *ast.CallExpr, p *packages.Package, at token.Position) error {
+	if len(targs) != 1 || len(v.Args) != 1 {
+		return fmt.Errorf("%s: unsupported provider expression", at)
+	}
+	s, err := c.f.valueExpr(v.Args[0], p)
+	if err != nil {
+		return err
+	}
+	return c.add(&binding{position: at, out: targs[0], expr: s})
+}
+
+// collectRef handles a bare function name, selector, or generic instantiation.
+func (c *collector) collectRef(v ast.Expr, p *packages.Package, at token.Position) error {
+	id := functionIdent(v)
+	if id == nil {
+		return fmt.Errorf("%s: unsupported provider expression", at)
+	}
+	switch o := p.TypesInfo.Uses[id].(type) {
+	case *types.Func:
+		return c.addFunc(o, p.TypesInfo, id, at)
+	case *types.Var:
+		if _, indexed := v.(*ast.IndexExpr); indexed {
+			return fmt.Errorf("%s: indexed values are not provider declarations", at)
+		}
+		if _, indexed := v.(*ast.IndexListExpr); indexed {
+			return fmt.Errorf("%s: indexed values are not provider declarations", at)
+		}
+		d, ok := c.f.decls[o.Pos()]
+		if !ok || c.visiting[o.Pos()] {
+			return fmt.Errorf("%s: cannot expand set %s", at, o.Name())
+		}
+		c.visiting[o.Pos()] = true
+		defer delete(c.visiting, o.Pos())
+		return c.collect(d.expr, d.pkg)
 	}
 	return fmt.Errorf("%s: unsupported provider expression", at)
 }

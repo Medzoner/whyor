@@ -107,7 +107,7 @@ func (f *file) injector(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	return fmt.Errorf("%s: %s: %w", f.pkg.Fset.Position(call.Pos()), fd.Name.Name, err)
 }
 
-func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error { //nolint:funlen // straight-line code generation, no branches worth extracting
+func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error {
 	obj, _ := f.pkg.TypesInfo.Defs[fd.Name].(*types.Func)
 	sig := obj.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.TypeParams().Len() > 0 || sig.Variadic() {
@@ -129,25 +129,9 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error { //nolint:fun
 		f: f, res: res, bindings: c.bindings, autos: c.autos, closers: c.closers,
 		done: map[typeID]string{}, fns: map[providerKey]string{}, names: map[string]bool{},
 	}
-	var params []string
-	for i := range sig.Params().Len() {
-		p := sig.Params().At(i)
-		name := p.Name()
-		if name != "_" && types.Universe.Lookup(name) != nil {
-			return fmt.Errorf("parameter %q shadows a predeclared Go identifier; rename it", name)
-		}
-		if name == "" || name == "_" {
-			name = r.localName(fmt.Sprintf("arg%d", i))
-		}
-		r.names[name] = true
-		if _, dup := r.done[f.types.key(p.Type())]; dup {
-			return fmt.Errorf("multiple parameters of type %s", f.typ(p.Type()))
-		}
-		r.done[f.types.key(p.Type())] = name
-		if isContext(p.Type()) {
-			r.initContext = name
-		}
-		params = append(params, name+" "+f.typ(p.Type()))
+	params, err := f.injectParams(sig, r)
+	if err != nil {
+		return err
 	}
 	r.errName = r.localName("err")
 	given := maps.Clone(r.done)
@@ -159,15 +143,50 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error { //nolint:fun
 		f.record(c, r)
 	}
 	if f.tree != nil {
-		if f.opts.format == "json" {
-			g := r.jsonGraph(fd.Name.Name, f.pkg.Fset.Position(fd.Pos()).String(), res.out, given)
-			f.opts.document.Graphs = append(f.opts.document.Graphs, g)
-			return nil
-		}
-		r.writeGraph(f.tree, fd.Name.Name, res.out, given, f.opts.format)
+		f.exportGraph(fd, res, given, r)
 		return nil
 	}
+	f.writeInjector(fd, res, params, r, out)
+	return nil
+}
 
+// injectParams renders the injector signature, rejecting shadowed or duplicate
+// parameters and registering each one as a known value.
+func (f *file) injectParams(sig *types.Signature, r *resolver) ([]string, error) {
+	var params []string
+	for i := range sig.Params().Len() {
+		p := sig.Params().At(i)
+		name := p.Name()
+		if name != "_" && types.Universe.Lookup(name) != nil {
+			return nil, fmt.Errorf("parameter %q shadows a predeclared Go identifier; rename it", name)
+		}
+		if name == "" || name == "_" {
+			name = r.localName(fmt.Sprintf("arg%d", i))
+		}
+		r.names[name] = true
+		if _, dup := r.done[f.types.key(p.Type())]; dup {
+			return nil, fmt.Errorf("multiple parameters of type %s", f.typ(p.Type()))
+		}
+		r.done[f.types.key(p.Type())] = name
+		if isContext(p.Type()) {
+			r.initContext = name
+		}
+		params = append(params, name+" "+f.typ(p.Type()))
+	}
+	return params, nil
+}
+
+// exportGraph records the graph for show/export modes instead of generating code.
+func (f *file) exportGraph(fd *ast.FuncDecl, res results, given map[typeID]string, r *resolver) {
+	if f.opts.format == "json" {
+		g := r.jsonGraph(fd.Name.Name, f.pkg.Fset.Position(fd.Pos()).String(), res.out, given)
+		f.opts.document.Graphs = append(f.opts.document.Graphs, g)
+		return
+	}
+	r.writeGraph(f.tree, fd.Name.Name, res.out, given, f.opts.format)
+}
+
+func (f *file) writeInjector(fd *ast.FuncDecl, res results, params []string, r *resolver, out string) {
 	rets := []string{f.typ(res.out)}
 	ret := out
 	if res.cleanup {
@@ -184,7 +203,6 @@ func (f *file) inject(fd *ast.FuncDecl, call *ast.CallExpr) error { //nolint:fun
 	}
 	fmt.Fprintf(&f.body, "func %s(%s) %s {\n%s\treturn %s\n}\n\n",
 		fd.Name.Name, strings.Join(params, ", "), retSig, r.lines.String(), ret)
-	return nil
 }
 
 // record notes the providers an injector declares and the ones it calls.

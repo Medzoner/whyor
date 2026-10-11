@@ -13,9 +13,12 @@ whyor is pre-1.0; review release notes before upgrading.
   bodyclose, contextcheck, exhaustive and others) alongside errcheck,
   wrapcheck and errorlint.
 - Enforce `gofumpt` and `gci` formatting; `make lint-fix` applies them.
-- Keep targeted exemptions only: infallible in-memory writers for errcheck,
-  test files for complexity/duplication linters, and justified `//nolint`
-  directives on documented generation hotspots instead of global thresholds.
+- No `//nolint` directives: split the CLI dispatch, provider collection,
+  code emission, injector generation and file generation into focused
+  functions to satisfy the strict thresholds; harden init file permissions;
+  exclude the two unavoidable generator gosec paths in configuration.
+- Keep targeted exemptions only: infallible in-memory writers for errcheck
+  and test files for complexity/duplication linters.
 - `make check` runs the full set; a `lint-fix` target was added to the Makefile.
 
 ## [v0.12.0]

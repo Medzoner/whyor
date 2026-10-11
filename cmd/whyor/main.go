@@ -35,7 +35,6 @@ func run(args []string) error {
 	return runWithWriters(args, os.Stdout, os.Stderr)
 }
 
-//nolint:cyclop,funlen // CLI argument dispatch: one branch per subcommand, no nested logic
 func runWithWriters(args []string, out, diagnostic io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
@@ -43,69 +42,85 @@ func runWithWriters(args []string, out, diagnostic io.Writer) error {
 	cmd, rest := args[0], args[1:]
 	switch cmd {
 	case "init":
-		dir := "."
-		if len(rest) > 0 {
-			dir = rest[0]
-		}
-		path, err := initFile(dir)
-		if err != nil {
-			return err
-		}
-		return writeLines(out, []string{path})
+		return runInit(rest, out)
 	case "show":
-		if len(rest) == 0 {
-			rest = []string{"./..."}
-		}
-		format := "tree"
-		if len(rest) >= 2 && rest[0] == "-f" {
-			format, rest = rest[1], rest[2:]
-		}
-		if len(rest) == 0 {
-			rest = []string{"./..."}
-		}
-		tree, err := gen.Show(".", rest, format)
-		if err != nil {
-			return fmt.Errorf("show dependencies: %w", err)
-		}
-		if _, err := io.WriteString(out, tree); err != nil {
-			return fmt.Errorf("write dependency graph: %w", err)
-		}
-		return nil
+		return runShow(rest, out)
 	case "unused":
-		if len(rest) == 0 {
-			rest = []string{"./..."}
-		}
-		list, err := gen.Unused(".", rest)
-		if err != nil {
-			return fmt.Errorf("check unused providers: %w", err)
-		}
-		if err := writeLines(out, list); err != nil {
-			return err
-		}
-		if len(list) > 0 {
-			return fmt.Errorf("%d unused provider(s)", len(list))
-		}
-		return nil
+		return runUnused(rest, out)
 	case "gen", "check":
-		if cmd == "gen" && len(rest) > 0 && rest[0] == "-w" {
-			return runWatch(rest[1:], out, diagnostic)
-		}
-		if len(rest) == 0 {
-			rest = []string{"./..."}
-		}
-		files, err := gen.Run(".", rest, cmd == "gen")
-		if err != nil {
-			return fmt.Errorf("%s packages: %w", cmd, err)
-		}
-		if err := writeLines(out, files); err != nil {
-			return err
-		}
-		if cmd == "check" && len(files) > 0 {
-			return fmt.Errorf("%d generated file(s) are stale; run whyor gen", len(files))
-		}
-		return nil
+		return runGen(cmd, rest, out, diagnostic)
 	}
 	return fmt.Errorf("unknown command %q\n%s", cmd, usage)
+}
+
+func runInit(rest []string, out io.Writer) error {
+	dir := "."
+	if len(rest) > 0 {
+		dir = rest[0]
+	}
+	path, err := initFile(dir)
+	if err != nil {
+		return err
+	}
+	return writeLines(out, []string{path})
+}
+
+func runShow(rest []string, out io.Writer) error {
+	if len(rest) == 0 {
+		rest = []string{"./..."}
+	}
+	format := "tree"
+	if len(rest) >= 2 && rest[0] == "-f" {
+		format, rest = rest[1], rest[2:]
+	}
+	if len(rest) == 0 {
+		rest = []string{"./..."}
+	}
+	tree, err := gen.Show(".", rest, format)
+	if err != nil {
+		return fmt.Errorf("show dependencies: %w", err)
+	}
+	if _, err := io.WriteString(out, tree); err != nil {
+		return fmt.Errorf("write dependency graph: %w", err)
+	}
+	return nil
+}
+
+func runUnused(rest []string, out io.Writer) error {
+	if len(rest) == 0 {
+		rest = []string{"./..."}
+	}
+	list, err := gen.Unused(".", rest)
+	if err != nil {
+		return fmt.Errorf("check unused providers: %w", err)
+	}
+	if err := writeLines(out, list); err != nil {
+		return err
+	}
+	if len(list) > 0 {
+		return fmt.Errorf("%d unused provider(s)", len(list))
+	}
+	return nil
+}
+
+func runGen(cmd string, rest []string, out, diagnostic io.Writer) error {
+	if cmd == "gen" && len(rest) > 0 && rest[0] == "-w" {
+		return runWatch(rest[1:], out, diagnostic)
+	}
+	if len(rest) == 0 {
+		rest = []string{"./..."}
+	}
+	files, err := gen.Run(".", rest, cmd == "gen")
+	if err != nil {
+		return fmt.Errorf("%s packages: %w", cmd, err)
+	}
+	if err := writeLines(out, files); err != nil {
+		return err
+	}
+	if cmd == "check" && len(files) > 0 {
+		return fmt.Errorf("%d generated file(s) are stale; run whyor gen", len(files))
+	}
+	return nil
 }
 
 func runWatch(pkgs []string, out, diagnostic io.Writer) error {

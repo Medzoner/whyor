@@ -32,9 +32,8 @@ var Providers = whyor.Set(
 
 // initFile writes dir/wire.go and returns its path. It never overwrites.
 func initFile(dir string) (string, error) {
-	// Scaffold permissions follow the Go toolchain's own convention for source
-	// files (0755/0644) so other local tools and users can read the skeleton.
-	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: conventional source directory
+	// Owner-only scaffold: the skeleton is created for the invoking user.
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", fmt.Errorf("create package directory %s: %w", dir, err)
 	}
 	name, err := packageName(dir)
@@ -42,14 +41,13 @@ func initFile(dir string) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(dir, "wire.go")
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // G302: conventional source file
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", fmt.Errorf("create skeleton %s: %w", path, err)
 	}
 	if err := writeSkeleton(f, name); err != nil {
-		// The path is dir/wire.go with dir chosen by the user on the CLI; removing
-		// the just-created skeleton is the intended rollback, not a traversal risk.
-		removeErr := os.Remove(path) //nolint:gosec // G703: user-chosen directory, same file created above
+		// Roll back the half-written skeleton; the path is the file created above.
+		removeErr := os.Remove(path)
 		if errors.Is(removeErr, os.ErrNotExist) {
 			removeErr = nil
 		}

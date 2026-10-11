@@ -26,9 +26,8 @@ func readOutput(path string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("refusing to replace non-regular generated file %s", path)
 	}
-	// The path is the injector's declared output file inside the module; reading
-	// it to verify the generated header is the intended behaviour.
-	data, err := os.ReadFile(path) //nolint:gosec // G304: module-relative output path
+	// The path is this injector's declared output file inside the module.
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read generated file %s: %w", path, err)
 	}
